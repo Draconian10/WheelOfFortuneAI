@@ -34,7 +34,11 @@ test('single shared header accommodates a signed-in host',async({page})=>{
   await page.goto('/');
   await expect(page.locator('.site-header .brand-wheel')).toBeVisible();
   await expect(page.locator('.brand-live')).toHaveText('LIVE');
-  await expect(page.locator('.site-header .site-nav .nav-link')).toHaveCount(2);
+  await expect(page.locator('.site-header .site-nav')).toHaveCount(0);
+  await expect(page.locator('.site-header a[href="/host"]')).toHaveCount(0);
+  await expect(page.locator('.site-header a[href="/join"]')).toHaveCount(0);
+  await expect(page.locator('.entry-card.host-entry')).toBeVisible();
+  await expect(page.locator('.entry-card.player-entry')).toBeVisible();
   await page.evaluate(()=>{
     const el=document.createElement('div');
     el.className='site-account';
@@ -153,6 +157,17 @@ test('lobby action area clearly distinguishes starting from ending',async({page}
   });
   expect(colors.primary).toContain('linear-gradient');
   expect(colors.end).toBe('rgb(58, 36, 67)');
+  const dividers=await page.evaluate(()=>{
+    const lobby=document.querySelector('.invite-panel');
+    const audience=document.createElement('div');
+    audience.className='display-access display-access--lobby';
+    lobby?.appendChild(audience);
+    return {
+      end:document.querySelectorAll('.lobby-end-divider').length,
+      audienceBorder:getComputedStyle(audience).borderTopWidth
+    };
+  });
+  expect(dividers).toEqual({end:0,audienceBorder:'0px'});
   await fits(page);
 });
 
@@ -199,5 +214,41 @@ test('winner text remains stationary while confetti overlay is present or remove
   const after=await page.getByRole('heading',{name:'Jon wins!'}).boundingBox();
   expect(before).not.toBeNull();expect(after).not.toBeNull();
   expect(Math.abs(before!.y-after!.y)).toBeLessThan(1);
+  await fits(page);
+});
+
+test('continued game button has a high-contrast dark play triangle',async({page})=>{
+  await fixture(page,'container shell-section session-container',
+    '<div class="pause-banner"><svg aria-hidden="true" viewBox="0 0 24 24"></svg><div><strong>Host reconnecting — game paused</strong></div>'+
+    '<button class="button primary pause-resume-button"><svg class="play-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3l15 9L5 21z"/></svg>Continue</button></div>');
+  const button=page.getByRole('button',{name:'Continue'});
+  await expect(button).toBeVisible();
+  const colors=await page.locator('.pause-resume-button svg').evaluate(svg=>{
+    const style=getComputedStyle(svg);
+    return {color:style.color,fill:style.fill,stroke:style.stroke,opacity:style.opacity};
+  });
+  expect(colors).toEqual({
+    color:'rgb(24, 32, 67)',fill:'rgb(24, 32, 67)',
+    stroke:'rgb(24, 32, 67)',opacity:'1'
+  });
+  await fits(page);
+});
+test('masthead stays a single row with account controls on mobile',async({page})=>{
+  await page.goto('/');
+  await page.evaluate(()=>{
+    const el=document.createElement('div');
+    el.className='site-account';
+    el.innerHTML='<span class="site-account-icon">●</span><span class="site-account-email">host@example.org</span><button type="button" class="site-logout">Sign out</button>';
+    document.querySelector('.site-header-inner')?.appendChild(el);
+  });
+  const position=await page.evaluate(()=>{
+    const brand=document.querySelector('.site-header .brand')!.getBoundingClientRect();
+    const account=document.querySelector('.site-header .site-account')!.getBoundingClientRect();
+    const inner=document.querySelector('.site-header-inner')!.getBoundingClientRect();
+    return {sameRow:Math.abs(brand.y-account.y)<18,accountOnRight:account.x>brand.x,headerHeight:inner.height};
+  });
+  expect(position.sameRow).toBe(true);
+  expect(position.accountOnRight).toBe(true);
+  expect(position.headerHeight).toBeLessThan(94);
   await fits(page);
 });
