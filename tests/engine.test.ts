@@ -142,3 +142,30 @@ describe('bonus round and host control',()=>{
     expect(s.remaining).toBe(20000);
   });
 });
+
+describe('automatic Toss-Up reveal and standings',()=>{
+  it('reveals letters automatically without host commands',()=>{
+    const s=starting();s.hostSeen=START+100000;
+    const start=s.puzzleStartedAt!;
+    reconcile(s,start+7000);
+    expect(s.revealed.length).toBeGreaterThan(0);
+    expect(s.phase).toBe('tossup');
+  });
+  it('ends Fortune Frenzy when its shared 30-second timer expires',()=>{
+    const s=starting();s.hostSeen=s.deadline!+10000;
+    reconcile(s,s.deadline!+1);
+    expect(s.phase).toBe('roundResult');
+    expect(s.puzzleIndex).toBe(0);
+  });
+  it('holds Triple Toss-Up standings between its three puzzles',()=>{
+    let s=starting();s.roundIndex=4;s.puzzleIndex=0;
+    s.hostSeen=START+100000;
+    s=send(s,{type:'buzz',windowId:s.windowId!},PLAYERS[0]);
+    s=send(s,{type:'judgeBuzz',correct:true});
+    expect(s.phase).toBe('roundResult');
+    expect(s.players[0].banked).toBe(2000);
+    s=send(s,{type:'nextRound'});
+    expect(s.roundIndex).toBe(4);expect(s.puzzleIndex).toBe(1);
+    expect(s.phase).toBe('tossup');
+  });
+});
