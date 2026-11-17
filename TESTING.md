@@ -25,8 +25,8 @@ npm run test:e2e
 npm run test:live:fixture
 ```
 
-The stress suite writes `test-results/stress/progress.json` as it runs and
-`test-results/stress/results.json` at completion. CI uploads the report even when another
+The stress suite writes `ci-artifacts/stress/progress.json` as it runs and
+`ci-artifacts/stress/results.json` at completion. CI uploads the report even when another
 check fails. Browser failures attach Playwright screenshots/traces to GitHub Actions.
 
 ## What is, and is not, load-tested

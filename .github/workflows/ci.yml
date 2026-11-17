@@ -20,6 +20,8 @@ jobs:
       - run: npm test
       - name: Complete-show and SQL concurrency stress regression
         run: npm run test:stress
+        env:
+          STRESS_OUTPUT_DIR: ci-artifacts/stress
         timeout-minutes: 7
       - run: npm run build
       - run: npx playwright install --with-deps chromium
@@ -34,7 +36,7 @@ jobs:
         with:
           name: game-night-stress-report
           path: |
-            test-results/stress/
+            ci-artifacts/stress/
           if-no-files-found: warn
           retention-days: 14
       - uses: actions/upload-artifact@v4
