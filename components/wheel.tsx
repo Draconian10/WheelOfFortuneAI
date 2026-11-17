@@ -24,26 +24,41 @@ function wedgeLabelSize(label:string){
   if(label.length>4)return 37;
   return 43;
 }
-export default function Wheel({kind,spin,compact=false}:{kind:RoundKind;spin?:Spin;compact?:boolean}){
+export default function Wheel({kind,spin,compact=false,onSpinSettled}:{
+  kind:RoundKind;spin?:Spin;compact?:boolean;onSpinSettled?:(id:string)=>void;
+}){
   const wedges=wheelForRound(kind);
   const uid=useId().replace(/:/g,'');
   const [rotation,setRotation]=useState(0);
   const [spinning,setSpinning]=useState(false);
+  const [settledId,setSettledId]=useState('');
   const seen=useRef('');
+  const completed=useRef('');
+  const onSpinSettledRef=useRef(onSpinSettled);
   const angleRef=useRef(0);
+  useEffect(()=>{onSpinSettledRef.current=onSpinSettled;},[onSpinSettled]);
+  const settle=(id:string)=>{
+    if(completed.current===id)return;
+    completed.current=id;setSpinning(false);setSettledId(id);
+    onSpinSettledRef.current?.(id);
+  };
   useEffect(()=>{
     if(!spin||spin.id===seen.current)return;
     const desired=(360-spin.index*15)%360;
     const current=((angleRef.current%360)+360)%360;
     const extra=(desired-current+360)%360;
     const next=angleRef.current+2160+extra;
+    const id=spin.id;
     const frame=requestAnimationFrame(()=>{
       angleRef.current=next;
-      seen.current=spin.id;
+      seen.current=id;
       setSpinning(true);
       setRotation(next);
     });
-    return()=>cancelAnimationFrame(frame);
+    // Some devices suppress transitionend (reduced motion / background tab).
+    // The fallback keeps the status usable without firing twice.
+    const fallback=setTimeout(()=>settle(id),4300);
+    return()=>{cancelAnimationFrame(frame);clearTimeout(fallback);};
   },[spin?.id,spin?.index]);
 
   return <div className={'wheel-assembly'+(compact?' wheel-compact':'')}>
@@ -51,7 +66,9 @@ export default function Wheel({kind,spin,compact=false}:{kind:RoundKind;spin?:Sp
     <div className="wheel-disc" style={{
       transform:'rotate('+rotation+'deg)',
       transition:spinning?'transform 4.2s cubic-bezier(.09,.72,.09,1)':'none'
-    }} onTransitionEnd={()=>setSpinning(false)}>
+    }} onTransitionEnd={e=>{
+      if(e.target===e.currentTarget&&spin)settle(spin.id);
+    }}>
       <svg viewBox="0 0 700 700" role="img"
         aria-label="Twenty-four-segment Wheel of Fortune prize wheel with vivid cash wedges and a large readable center logo">
         <defs>
@@ -109,6 +126,6 @@ export default function Wheel({kind,spin,compact=false}:{kind:RoundKind;spin?:Sp
         <circle cx="461" cy="350" r="6.5" fill="#fff"/>
       </svg>
     </div>
-    {spin&&<div className="wheel-result" aria-live="polite">{spinning?'SPINNING…':spin.wedge.label}</div>}
+    {spin&&<div className="wheel-result" aria-live="polite">{settledId===spin.id?spin.wedge.label:'SPINNING…'}</div>}
   </div>;
 }
