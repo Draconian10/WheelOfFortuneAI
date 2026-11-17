@@ -146,6 +146,12 @@ test('complete 5-contestant browser game: join, live buzz, host control, rounds,
     await contestants[0].locator('button.buzzer.ready').click();
     await expect(contestants[0].locator('[data-game-phase="tossupAnswer"]')).toBeVisible();
     await host.reload();
+    await expect(host.getByLabel('Private Correct Response')).toContainText('LET THE GOOD TIMES ROLL');
+    await expect(host.locator('.action-ticker')).toContainText('LIVE GAME UPDATE');
+    await expect(host.getByText('STAGE 1 OF 6')).toBeVisible();
+    await expect(host.getByRole('button',{name:'Correct',exact:true})).not.toContainText('(C)');
+    await expect(host.getByRole('button',{name:'Incorrect',exact:true})).not.toContainText('(X)');
+    await expect(contestants[0].getByLabel('Private Correct Response')).toHaveCount(0);
     await host.getByRole('button',{name:/Correct/}).click();
     await expect(host.locator('[data-game-phase="roundResult"]')).toBeVisible();
     expect(s.players[0].banked).toBe(1000);
