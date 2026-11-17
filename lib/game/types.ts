@@ -1,7 +1,7 @@
 export type RoundKind = 'tossup' | 'regular' | 'mystery' | 'prize' | 'triple' | 'final';
 export type WedgeKind = 'cash' | 'bankrupt' | 'lose' | 'free' | 'wild' | 'mystery' | 'express' | 'million';
 export type Phase =
-  | 'lobby' | 'tossup' | 'tossupAnswer' | 'turn' | 'spinning' | 'letter' | 'mysteryChoice'
+  | 'lobby' | 'tossup' | 'tossupAnswer' | 'turn' | 'spinning' | 'letter' | 'wildLetter' | 'mysteryChoice'
   | 'expressChoice' | 'express' | 'speedup' | 'roundResult' | 'tieTossup'
   | 'tieAnswer' | 'bonusCategory' | 'bonusSpin' | 'bonusLetters' | 'bonusTimer'
   | 'bonusResult' | 'finished' | 'ended';
