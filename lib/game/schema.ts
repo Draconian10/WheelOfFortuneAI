@@ -47,6 +47,7 @@ export const commandSchema=z.discriminatedUnion('type',[
   z.object({type:z.literal('remove'),playerId:z.string().uuid()}).strict(),
   z.object({type:z.literal('start')}).strict(),z.object({type:z.literal('nextRound')}).strict(),
   z.object({type:z.literal('revealLetter')}).strict(),
+  z.object({type:z.literal('revealTimedOut')}).strict(),
   z.object({type:z.literal('buzz'),windowId:z.string().uuid()}).strict(),
   z.object({type:z.literal('judgeBuzz'),correct:z.boolean()}).strict(),
   z.object({type:z.literal('spin')}).strict(),

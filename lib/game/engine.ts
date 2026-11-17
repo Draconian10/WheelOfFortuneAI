@@ -12,7 +12,7 @@ export const MAX_PLAYERS = 5;
 const VOWELS = 'AEIOU';
 const BASE_BONUS = 'RSTLNE';
 const HOST_COMMANDS = new Set([
-  'claim','pause','continue','lockLobby','remove','start','nextRound','revealLetter',
+  'claim','pause','continue','lockLobby','remove','start','nextRound','revealLetter','revealTimedOut',
   'judgeBuzz','hostSolve','speedUp','bonusJudge','finish','undo','end'
 ]);
 const FINISHED = new Set(['finished','ended']);
@@ -60,7 +60,7 @@ function addBanked(s:GameState,p:Player,value:number,ctx:Context,reason:string){
 function resetPuzzle(s:GameState){
   s.revealed=[];s.usedLetters=[];s.respondent=undefined;s.attempted=[];
   s.pendingSpin=undefined;s.speedupCanSolve=false;s.mysteryCash=undefined;s.spin=undefined;s.undo=undefined;
-  s.answerStartedAt=undefined;s.spinEndsAt=undefined;
+  s.answerStartedAt=undefined;s.spinEndsAt=undefined;s.puzzleTimedOut=undefined;s.frenzyRemaining=undefined;
 }
 function nextPlayer(s:GameState){
   const players=activePlayers(s);
@@ -92,13 +92,13 @@ function setRound(s:GameState,ctx:Context){
 function advanceTossup(s:GameState,ctx:Context){
   const round=currentRound(s);
   if(round&&s.puzzleIndex+1<round.puzzles.length){
-    const frenzy=s.roundIndex===0&&s.definition.opening==='frenzy';
-    const carry=frenzy?s.frenzyRemaining:undefined;
+    // Each Fortune Frenzy puzzle must have a fresh timer when the host starts it.
+    // Never reuse the seconds remaining on the previously judged question.
     s.puzzleIndex++;resetPuzzle(s);s.puzzleStartedAt=ctx.now;
     s.phase='tossup';s.windowId=crypto.randomUUID();
-    s.deadline=ctx.now+(carry??TOSSUP_MS);
-    s.remaining=Math.max(0,s.deadline-ctx.now);s.frenzyRemaining=undefined;
-    s.lastAction='Puzzle '+(s.puzzleIndex+1)+' is ready. Buzz when you know the answer.';
+    s.deadline=ctx.now+TOSSUP_MS;
+    s.remaining=TOSSUP_MS;
+    s.lastAction='Puzzle '+(s.puzzleIndex+1)+' is ready. You have 30 seconds to buzz.';
   }else finishRound(s);
 }
 function completedTossup(s:GameState,ctx:Context,player:Player){
@@ -112,18 +112,14 @@ function completedTossup(s:GameState,ctx:Context,player:Player){
     ?(s.puzzleIndex===0?1000:2000):1000;
   addBanked(s,player,value,ctx,'Solved '+(round?.title??'Toss-Up'));
   s.roundStarterId=player.id;
-  if(s.roundIndex===0&&s.definition.opening==='frenzy'&&s.deadline===undefined)
-    s.deadline=ctx.now+(s.remaining??TOSSUP_MS);
   if(round?.kind==='triple'){
     s.tripleWinners.push(player.id);
     if(s.puzzleIndex===2 && s.tripleWinners.length===3 &&
       s.tripleWinners.every(id=>id===player.id))
       addBanked(s,player,4000,ctx,'Triple Toss-Up sweep bonus');
   }
-  // Every puzzle gets an explicit host-controlled standings interstitial.
-  // Frenzy retains the unused clock, but never skips to the next question.
-  if(s.roundIndex===0&&s.definition.opening==='frenzy')
-    s.frenzyRemaining=Math.max(0,s.remaining??TOSSUP_MS);
+  // After a judgment, show standings until the host explicitly advances.
+  // The next Frenzy question starts its own full 30-second clock.
   s.revealed=[...new Set(currentPuzzle(s).answer.toUpperCase().match(/[A-Z]/g)??[])];
   s.lastAction=player.name+' solved a '+(round?.kind==='triple'?'Triple Toss-Up':'Toss-Up')+'!';
   finishRound(s);
@@ -186,8 +182,9 @@ function expire(s:GameState,ctx:Context){
     s.remaining=TOSSUP_MS;s.attempted=[];s.revealed=[];
   }else if(s.phase==='tossup'){
     if(s.roundIndex===0&&s.definition.opening==='frenzy'){
-      s.frenzyRemaining=0;
-      s.lastAction='Fortune Frenzy time is up.';
+      // Expiry never selects the next puzzle and never reveals its solution.
+      s.puzzleTimedOut=true;
+      s.lastAction='Time is up for this Frenzy puzzle. The host can reveal the answer or continue.';
       finishRound(s);
     }else advanceTossup(s,ctx);
   }
@@ -351,7 +348,6 @@ export function applyCommand(original:GameState,command:Command,ctx:Context):Gam
         if(!available){s.attempted=[];s.revealed=[];}
         s.deadline=ctx.now+(s.remaining??TOSSUP_MS);
       }else if(s.roundIndex===0&&s.definition.opening==='frenzy'){
-        s.frenzyRemaining=Math.max(0,s.remaining??TOSSUP_MS);
         s.revealed=[...new Set(currentPuzzle(s).answer.toUpperCase().match(/[A-Z]/g)??[])];
         s.lastAction=p.name+' answered incorrectly. The host can advance to the next puzzle.';
         finishRound(s);
@@ -365,11 +361,18 @@ export function applyCommand(original:GameState,command:Command,ctx:Context):Gam
       }
       break;
     }
+    case 'revealTimedOut':{
+      phase('roundResult');
+      ensure(s.puzzleTimedOut===true,'There is no concealed timed-out solution to reveal.',409);
+      s.puzzleTimedOut=false;
+      s.revealed=[...new Set(currentPuzzle(s).answer.toUpperCase().match(/[A-Z]/g)??[])];
+      s.lastAction='The host revealed the answer to puzzle '+(s.puzzleIndex+1)+'.';
+      break;
+    }
     case 'nextRound':{
       phase('roundResult');
       if(['triple','tossup'].includes(currentRound(s)?.kind??'')&&
-        s.puzzleIndex+1<currentRound(s)!.puzzles.length&&
-        !(s.roundIndex===0&&s.definition.opening==='frenzy'&&s.frenzyRemaining===0)){
+        s.puzzleIndex+1<currentRound(s)!.puzzles.length){
         advanceTossup(s,ctx);
       }else if(s.roundIndex===s.definition.rounds.length-1){
         const players=activePlayers(s),high=Math.max(...players.map(total)),leaders=players.filter(p=>total(p)===high);
@@ -583,7 +586,8 @@ export function viewSession(s:GameState,userId:string,now:number,controller?:str
   const host=userId===s.hostId&&!audience;
   ensure(host||audience||activePlayers(s).some(p=>p.id===userId),'You do not have access to this session.',403);
   const round=currentRound(s),puzzle=currentPuzzle(s);
-  const showAnswer=host||s.phase==='roundResult'||s.phase==='bonusResult'||s.phase==='finished'||s.phase==='ended';
+  const showAnswer=host||((s.phase==='roundResult'&&!s.puzzleTimedOut)||
+    s.phase==='bonusResult'||s.phase==='finished'||s.phase==='ended');
   const tiles=puzzle.answer.toUpperCase().split('').map(ch=>!/[A-Z]/.test(ch)||s.revealed.includes(ch)?ch:'');
   const extra=s.phase.startsWith('bonus')||s.phase==='finished';
   return {
@@ -598,7 +602,7 @@ export function viewSession(s:GameState,userId:string,now:number,controller?:str
     players:activePlayers(s).map(p=>({...p,pendingPrizes:p.pendingPrizes.map(x=>({...x}))})),
     currentPlayerId:s.currentPlayerId,respondent:s.respondent,windowId:s.windowId,
     attempted:s.attempted,revealed:s.revealed,usedLetters:s.usedLetters,
-    spin:s.spin,pendingSpin:s.pendingSpin,lastAction:s.lastAction,
+    spin:s.spin,pendingSpin:s.pendingSpin,lastAction:s.lastAction,puzzleTimedOut:s.puzzleTimedOut,
     deadline:s.deadline,remaining:s.remaining,spinEndsAt:s.spinEndsAt,frenzyRemaining:s.frenzyRemaining,speedupValue:s.speedupValue,
     speedupCanSolve:s.speedupCanSolve,bonusPlayerId:s.bonusPlayerId,bonusPuzzleIndex:s.bonusPuzzleIndex,
     bonusCategories:extra?s.definition.bonus.puzzles.map(p=>p.category):undefined,

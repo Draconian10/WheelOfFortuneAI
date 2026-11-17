@@ -78,8 +78,10 @@ export interface GameState {
   deadline?: number;
   /** Wait until the broadcast wheel has completed before resolving the wedge. */
   spinEndsAt?: number;
-  /** Time still available across the host-paced Fortune Frenzy puzzle sequence. */
+  /** Legacy time field for sessions created before the per-puzzle countdown fix. */
   frenzyRemaining?: number;
+  /** The buzzer countdown expired without a correct solve; do not expose the answer until the host reveals it. */
+  puzzleTimedOut?: boolean;
   puzzleStartedAt?: number;
   answerStartedAt?: number;
   pausedAt?: number;
@@ -120,6 +122,7 @@ export interface SessionView {
   currentPlayerId?: string; respondent?: string; windowId?: string; attempted: string[];
   revealed: string[]; usedLetters: string[]; spin?: Spin; pendingSpin?: Spin;
   lastAction?: string; deadline?: number; remaining?: number; spinEndsAt?: number; frenzyRemaining?: number;
+  puzzleTimedOut?: boolean;
   speedupValue?: number; speedupCanSolve?: boolean;
   bonusPlayerId?: string; bonusPuzzleIndex?: number;
   bonusCategories?: string[]; bonusLetters: string[]; bonusPrize?: Prize; bonusWon?: boolean;
