@@ -240,6 +240,10 @@ test('continued game button has a high-contrast dark play triangle',async({page}
 });
 test('masthead stays a single row with account controls on mobile',async({page})=>{
   await page.goto('/');
+  await page.waitForFunction(()=>{
+    const wheel=document.querySelector('.wheel-disc');
+    return !!wheel&&Object.keys(wheel).some(key=>key.startsWith('__reactFiber'));
+  });
   await page.evaluate(()=>{
     const el=document.createElement('div');
     el.className='site-account';
