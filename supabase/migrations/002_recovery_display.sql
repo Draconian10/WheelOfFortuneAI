@@ -141,15 +141,13 @@ begin
     return jsonb_build_object('error','That player seat is no longer recoverable.','status',409);
   end if;
 
-  hydrated:=public.hydrate_session_state(p_session,s.state);
+  hydrated:=s.state;
   now_ms:=floor(extract(epoch from clock_timestamp())*1000)::bigint;
   next_state:=public.replace_player_identity(hydrated,r.player_id::text,r.claimant_id::text);
   next_state:=jsonb_set(next_state,'{version}',to_jsonb(s.version+1));
   next_state:=jsonb_set(next_state,'{actionVersion}',to_jsonb((s.state->>'actionVersion')::integer+1));
   next_state:=jsonb_set(next_state,'{updatedAt}',to_jsonb(now_ms));
   update public.sessions set state=next_state,version=s.version+1 where id=p_session;
-    where session_id=p_session and user_id=r.player_id;
-    where session_id=p_session and user_id=r.player_id;
   update public.session_presence set user_id=r.claimant_id,last_seen_ms=now_ms,controller=null
     where session_id=p_session and user_id=r.player_id;
   insert into public.session_presence(session_id,user_id,last_seen_ms)
