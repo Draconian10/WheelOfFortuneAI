@@ -1,13 +1,11 @@
 'use client';
 import {useEffect,useState} from 'react';
 import Link from 'next/link';
-import {usePathname} from 'next/navigation';
 import type {User} from '@supabase/supabase-js';
-import {LogOut,UserRound,MonitorPlay,Smartphone} from 'lucide-react';
+import {LogOut,UserRound} from 'lucide-react';
 import {configured,supabase} from '@/lib/client';
 
 export default function SiteHeader(){
-  const pathname=usePathname();
   const [host,setHost]=useState<User|null>(null);
   const [signingOut,setSigningOut]=useState(false);
   useEffect(()=>{
@@ -36,12 +34,6 @@ export default function SiteHeader(){
           <span className="brand-live">LIVE</span>
         </span>
       </Link>
-      <nav className="site-nav" aria-label="Main navigation">
-        <Link className={'nav-link'+(pathname.startsWith('/host')?' is-current':'')} href="/host"
-          aria-current={pathname.startsWith('/host')?'page':undefined}><MonitorPlay size={17} aria-hidden="true"/><span>Host Game</span></Link>
-        <Link className={'nav-link'+(pathname.startsWith('/join')||pathname.startsWith('/play')?' is-current':'')} href="/join"
-          aria-current={pathname.startsWith('/join')||pathname.startsWith('/play')?'page':undefined}><Smartphone size={17} aria-hidden="true"/><span>Join Game</span></Link>
-      </nav>
       {host&&<div className="site-account" aria-label="Host account">
         <span className="site-account-icon"><UserRound size={16} aria-hidden="true"/></span>
         <span className="site-account-email" title={host.email}> {host.email}</span>
