@@ -106,7 +106,7 @@ input:focus,textarea:focus,select:focus{border-color:#eac478;box-shadow:0 0 0 3p
 .brand-title{font-family:'Barlow Condensed',Impact,sans-serif;font-size:1.65rem;font-weight:900;letter-spacing:.015em;color:#fff}
 .brand-gold{color:#ffd273}
 .brand-caption{font-family:'DM Sans',sans-serif;letter-spacing:.19em;font-size:.57rem;font-weight:800;color:#b1c4c9}
-.site-nav{margin-left:auto;display:flex;align-items:center;gap:6px}
+.site-header .site-nav{margin-left:auto;display:flex;align-items:center;gap:6px}
 .site-header .site-nav .nav-link{
   display:inline-flex;align-items:center;justify-content:center;gap:8px;
   min-height:42px;padding:10px 13px;font-size:.84rem;font-weight:800;
@@ -390,7 +390,7 @@ body:has(.audience-container){background:#080f17}
     grid-template-areas:'brand account' 'nav nav';gap:8px 10px;padding-block:10px;min-height:0;
   }
   .site-header .brand{grid-area:brand}
-  .site-nav{grid-area:nav;margin-left:0;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .site-header .site-nav{grid-area:nav;margin-left:0;display:grid;grid-template-columns:1fr 1fr;gap:8px}
   .site-header .site-nav .nav-link{min-height:39px;padding:9px 11px;font-size:.8rem;background:#1a2b36;border:1px solid #38505a}
   .site-header .site-nav .nav-link.is-current{background:#344035;border-color:#bd9d5f;color:#ffe0a0}
   .site-account{grid-area:account;max-width:225px;margin-left:auto}
@@ -470,7 +470,9 @@ body:has(.audience-container){background:#080f17}
   .pause-banner .button{width:100%}
 }
 @media(max-width:350px){
-  .site-account-email{max-width:72px}
+  .site-account{max-width:40px}
+  .site-account-icon,.site-account-email{display:none}
+  .site-account-email{max-width:0}
   .brand-caption{display:none}
   .brand-title{font-size:1.16rem}
   .site-header .site-nav .nav-link{font-size:.72rem;gap:5px}
@@ -481,3 +483,9 @@ body:has(.audience-container){background:#080f17}
 @media(prefers-reduced-motion:reduce){
   .entry-card,.button,.icon-button,.site-header .nav-link{transition:none!important}
 }
+
+/* Accessibility safeguards for the compact controls and dark-on-dark text. */
+.alphabet-key:disabled{opacity:.74}
+.icon-button:disabled,.site-logout:disabled{opacity:.64}
+.hero-copy,.game-primary,.puzzle-editor,.game-sidebar,.turn-panel{min-width:0}
+.celebration,.bonus-stage,.round-complete{overflow-wrap:anywhere}
