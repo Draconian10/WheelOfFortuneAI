@@ -617,3 +617,10 @@ body:has(.audience-container){background:#070b20}
 /* Pause banner icons never stretch the alert row. */
 .pause-banner>svg{width:20px;height:20px;flex:0 0 20px}
 .pause-banner>div{min-width:0}
+
+/* Speed-Up solve interval: readable alongside actions on mobile and desktop. */
+.speedup-solve-clock{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;
+  gap:10px;margin:12px 0;padding:10px 12px;border:1px solid #536baf;border-radius:12px;
+  background:rgba(9,20,63,.45);font-weight:800;color:#f3f5ff}
+.speedup-solve-clock .timer{margin:0;min-width:100px}
+@media(max-width:480px){.speedup-solve-clock{justify-content:center;text-align:center}}
