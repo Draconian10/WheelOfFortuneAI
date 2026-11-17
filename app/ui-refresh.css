@@ -97,18 +97,9 @@ input:focus,textarea:focus,select:focus{border-color:#eac478;box-shadow:0 0 0 3p
   background:#fff0ce;color:#91601d;border:1px solid #f0d7a0;border-radius:6px;
   font-size:.64rem;font-weight:900;letter-spacing:.095em;padding:5px 7px;line-height:1;
 }
-.site-header .site-nav{margin-left:auto;display:flex;align-items:center;gap:4px}
-.site-header .site-nav .nav-link{
-  display:inline-flex;align-items:center;justify-content:center;gap:8px;
-  min-height:39px;padding:9px 12px;font-size:.83rem;font-weight:800;
-  color:#303b69;border:1px solid transparent;border-radius:9px;
-  transition:background .2s,border-color .2s,color .2s;
-}
-.site-header .site-nav .nav-link:hover{background:#edf0ff;color:#1c2864}
-.site-header .site-nav .nav-link.is-current{background:#e9edff;border-color:#cdd6f7;color:#222f76}
 .site-account{
   display:flex;align-items:center;gap:9px;min-width:0;max-width:330px;
-  padding:5px 5px 5px 12px;border-left:1px solid #dde2f0;
+  margin-left:auto;padding:5px 5px 5px 12px;
 }
 .site-account-icon{display:grid;place-items:center;flex-shrink:0;color:#34418f}
 .site-account-email{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
@@ -180,7 +171,7 @@ body:has(.audience-container){background:#070b20}
 
 /* Live session heading and game frame */
 .session-container{padding-block:24px 70px}
-.session-topline{padding:8px 0 16px;margin-bottom:19px;border-bottom:1px solid #384879}
+.session-topline{padding:8px 0 12px;margin-bottom:19px}
 .connection-actions{gap:9px;flex-wrap:wrap}
 .connection.connected{background:#17483d;color:#a4f2cb}
 .connection.disconnected{background:#62283f;color:#ffd4d6}
@@ -371,19 +362,11 @@ body:has(.audience-container){background:#070b20}
   .wheel-area .wheel-assembly{max-width:460px}
   .editor-main{grid-template-columns:minmax(250px,.72fr) minmax(0,1.28fr)}
   .lobby-layout{grid-template-columns:1fr 1fr}
-  .site-header .site-nav .nav-link{padding:9px 10px}
   .audience-container .game-layout{grid-template-columns:1fr}
 }
 @media(max-width:750px){
-  .site-header-inner{
-    display:grid;grid-template-columns:1fr auto;
-    grid-template-areas:'brand account' 'nav nav';gap:8px 10px;padding-block:10px;min-height:0;
-  }
-  .site-header .brand{grid-area:brand}
-  .site-header .site-nav{grid-area:nav;margin-left:0;display:grid;grid-template-columns:1fr 1fr;gap:8px}
-  .site-header .site-nav .nav-link{min-height:39px;padding:9px 11px;font-size:.8rem;background:#202f5c;border:1px solid #485d96}
-  .site-header .site-nav .nav-link.is-current{background:#36366c;border-color:#d5ab59;color:#ffe0a0}
-  .site-account{grid-area:account;max-width:225px;margin-left:auto}
+  .site-header-inner{display:flex;align-items:center;justify-content:space-between;gap:10px;padding-block:10px;min-height:62px}
+  .site-account{max-width:225px;margin-left:auto}
   .site-account-email{max-width:125px}
   .brand-wheel{width:41px;height:41px}
   .brand-title{font-size:1.4rem}
@@ -465,13 +448,12 @@ body:has(.audience-container){background:#070b20}
   .site-account-email{max-width:0}
   .brand-caption{display:none}
   .brand-title{font-size:1.16rem}
-  .site-header .site-nav .nav-link{font-size:.72rem;gap:5px}
   .puzzle-tile{width:16px;height:31px}
   .round-money{grid-template-columns:1fr 1fr}
   .round-money strong{font-size:1.4rem}
 }
 @media(prefers-reduced-motion:reduce){
-  .entry-card,.button,.icon-button,.site-header .nav-link{transition:none!important}
+  .entry-card,.button,.icon-button{transition:none!important}
 }
 
 /* Accessibility safeguards for the compact controls and dark-on-dark text. */
@@ -496,7 +478,6 @@ body:has(.audience-container){background:#070b20}
 .empty-players strong{font-size:1.04rem;color:#f5f7ff}
 .empty-players p{max-width:290px;font-size:.83rem;line-height:1.6;color:#bbcaee;margin:0}
 .lobby-players .waiting-bar{margin-top:auto}
-.lobby-end-divider{height:1px;background:#465486;margin:4px 0}
 .lobby-end-button{
   background:#3a2443;color:#ffcbd8;
   border:1px solid #9b567a;
@@ -519,10 +500,7 @@ body:has(.audience-container){background:#070b20}
  .site-logout span{display:none}
 }
 @media(max-width:750px){
- .site-header-inner{grid-template-areas:'brand account' 'nav nav';background:#fafaff}
- .site-header .site-nav{background:transparent}
- .site-header .site-nav .nav-link{background:#f3f4fd;border:1px solid #e5e8f4;color:#354176}
- .site-header .site-nav .nav-link.is-current{background:#e6ebff;border-color:#c8d2f4;color:#24347b}
+ .site-header-inner{display:flex;justify-content:space-between;align-items:center;background:#fafaff}
  .site-account{background:none;border-left:0;max-width:210px;margin-left:auto;padding:0}
  .site-account-email{max-width:115px}
  .lobby-players{min-height:0}
@@ -616,3 +594,26 @@ body:has(.audience-container){background:#070b20}
 @media(max-width:540px){
  .frenzy-puzzle-count{display:block;margin-top:3px;font-size:.74rem}
 }
+
+/* One-row masthead: Host Game and Join Game are available on the home screen. */
+.site-header-inner{justify-content:space-between}
+.site-header .brand{min-width:0}
+.site-header .site-account{margin-left:auto;border:0}
+/* Use spacing, not two decorative separators, between lobby actions. */
+.invite-panel .lobby-actions{gap:10px}
+.invite-panel .lobby-end-button{margin-top:12px}
+.invite-panel .display-access--lobby{border-top:0;padding-top:0;margin-top:14px}
+/* Ensure the triangular glyph contrasts with the golden Continue button. */
+.pause-banner .pause-resume-button{display:inline-flex;align-items:center;justify-content:center;gap:9px}
+.pause-banner .pause-resume-button svg{
+  color:#182043;stroke:#182043;fill:#182043;stroke-width:2.5;
+  width:18px;height:18px;opacity:1;flex-shrink:0;
+}
+@media(max-width:750px){
+  .site-header-inner{display:flex;flex-wrap:nowrap;min-height:62px;justify-content:space-between}
+  .site-header .site-account{min-width:0;margin-left:auto}
+}
+
+/* Pause banner icons never stretch the alert row. */
+.pause-banner>svg{width:20px;height:20px;flex:0 0 20px}
+.pause-banner>div{min-width:0}

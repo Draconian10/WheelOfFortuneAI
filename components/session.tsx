@@ -12,6 +12,7 @@ import {api,configured,money} from '@/lib/client';
 import type {Command} from '@/lib/game/schema';
 import type {SessionView} from '@/lib/game/types';
 import {MAX_PLAYERS,MIN_PLAYERS,total} from '@/lib/game/engine';
+import {sessionReturnHref} from '@/lib/session-navigation';
 import {useRoom} from './use-room';
 import Wheel from './wheel';
 import PuzzleBoard from './puzzle-board';
@@ -96,7 +97,7 @@ function LiveSession({id,role,displayToken}:{
     <p className="muted">{error||'Synchronizing your game state.'}</p>
     <Link href={host?'/host':'/join'} className="button secondary">Go back</Link>
   </div></main>;
-  const dashboardHref=host?'/host':audience?'/':'/join';
+  const dashboardHref=sessionReturnHref(role,Boolean(ended));
   const clock=<div className={'timer '+(remaining<=5000?'urgent':'')} aria-label="Time remaining">
     <Timer size={19}/><strong>{formattedTime(remaining)}</strong></div>;
   const headline=<div className="live-heading">
@@ -142,11 +143,11 @@ function LiveSession({id,role,displayToken}:{
         a.href=url;a.download='fortune-results-'+s.joinCode+'.csv';a.click();URL.revokeObjectURL(url);
       }catch(e){alert((e as Error).message);}
     }}>Download results CSV</button>}
-      <Link href={dashboardHref} className="button primary">Back to home <ArrowRight size={16}/></Link></div>
+      <Link href="/" className="button primary">Back to Home <ArrowRight size={16}/></Link></div>
   </section>;
   return <main className={'container shell-section session-container '+(player?'player-container ':'')+(audience?'audience-container':'')}
     data-game-phase={s.phase} data-buzzer-window={s.windowId??''}>
-    <div className="session-topline"><Link href={dashboardHref} className="back-link"><ArrowLeft size={15}/> {host?'Your games':audience?'Home':'Join Game'}</Link>
+    <div className="session-topline"><Link href={dashboardHref} className="back-link"><ArrowLeft size={15}/> {ended?'Home':host?'Your games':audience?'Home':'Join Game'}</Link>
       <div className="button-row connection-actions">{!audience&&!ended&&<KeepAwake/>}
         <span className={'connection '+(connected?'connected':'disconnected')}>
           {connected?<Wifi size={14}/>:<WifiOff size={14}/>}
@@ -174,7 +175,7 @@ function LiveSession({id,role,displayToken}:{
     {s.paused&&!ended&&<div className="pause-banner"><Pause size={20}/>
       <div><strong>{s.pauseReason==='Host disconnected'?'Host reconnecting — game paused':'Game paused'}</strong>
         <p>Scores, prizes, puzzle progress, and your seat are saved.</p></div>
-      {control&&<button className="button primary" onClick={()=>doSend({type:'continue'})}><Play size={16}/> Continue</button>}
+      {control&&<button className="button primary pause-resume-button" onClick={()=>doSend({type:'continue'})}><Play size={18} fill="currentColor" strokeWidth={2.5} aria-hidden="true"/> Continue</button>}
     </div>}
     {ended?resultView:s.phase==='lobby'?
       <div className="lobby-layout">
@@ -193,8 +194,6 @@ function LiveSession({id,role,displayToken}:{
               {s.locked?<Unlock size={17}/>:<Lock size={17}/>} {s.locked?'Unlock Lobby':'Lock Lobby'}</button>
             <button className="button primary full" disabled={busy||s.paused||s.players.length<MIN_PLAYERS}
               onClick={()=>doSend({type:'start'})}><Play size={18}/> Start the Show</button>
-            <p className="muted tiny">Start anytime with {MIN_PLAYERS}–{MAX_PLAYERS} contestants. You don't need a full lobby.</p>
-            <div className="lobby-end-divider"/>
             <button type="button" className="button lobby-end-button full"
               disabled={busy||!connected}
               onClick={()=>{
