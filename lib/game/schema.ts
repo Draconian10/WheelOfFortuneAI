@@ -59,6 +59,7 @@ export const commandSchema=z.discriminatedUnion('type',[
   z.object({type:z.literal('speedUp')}).strict(),
   z.object({type:z.literal('pass')}).strict(),
   z.object({type:z.literal('chooseBonus'),index:z.number().int().min(0).max(2)}).strict(),
+  z.object({type:z.literal('spinBonus')}).strict(),
   z.object({type:z.literal('bonusLetter'),letter:z.string().regex(/^[A-Za-z]$/)}).strict(),
   z.object({type:z.literal('startBonus')}).strict(),
   z.object({type:z.literal('bonusSolve'),text:text(180).min(1)}).strict(),

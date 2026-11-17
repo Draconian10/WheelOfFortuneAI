@@ -29,7 +29,7 @@ export const normalize=(answer:string)=>answer.toUpperCase().replace(/[^A-Z0-9]/
 export function currentRound(s:GameState):GameRound|undefined{return s.definition.rounds[s.roundIndex];}
 export function currentPuzzle(s:GameState):Puzzle{
   if(s.phase==='tieTossup'||s.phase==='tieAnswer')return s.definition.tiebreaker;
-  if(['bonusCategory','bonusLetters','bonusTimer','bonusResult','finished'].includes(s.phase)&&s.bonusPuzzleIndex!==undefined)
+  if(['bonusCategory','bonusSpin','bonusLetters','bonusTimer','bonusResult','finished'].includes(s.phase)&&s.bonusPuzzleIndex!==undefined)
     return s.definition.bonus.puzzles[s.bonusPuzzleIndex];
   return currentRound(s)?.puzzles[s.puzzleIndex]??s.definition.tiebreaker;
 }
@@ -55,7 +55,7 @@ function addBanked(s:GameState,p:Player,value:number,ctx:Context,reason:string){
 }
 function resetPuzzle(s:GameState){
   s.revealed=[];s.usedLetters=[];s.respondent=undefined;s.attempted=[];
-  s.pendingSpin=undefined;s.speedupCanSolve=false;s.spin=undefined;s.undo=undefined;
+  s.pendingSpin=undefined;s.speedupCanSolve=false;s.mysteryCash=undefined;s.spin=undefined;s.undo=undefined;
 }
 function nextPlayer(s:GameState){
   const players=activePlayers(s);
@@ -117,7 +117,8 @@ function completedTossup(s:GameState,ctx:Context,player:Player){
   advanceTossup(s,ctx);
 }
 function bankrupt(s:GameState,p:Player){
-  p.roundMoney=0;p.pendingPrizes=[];
+  p.roundMoney=0;p.pendingPrizes=[];p.millionWedge=false;
+  s.mysteryCash=undefined;
   s.lastAction=p.name+' hit BANKRUPT';
   nextPlayer(s);
 }
@@ -143,18 +144,24 @@ function startBonus(s:GameState){
     s.bonusPlayerId=leaders[0].id;s.phase='bonusCategory';
   }
 }
-function prepareBonus(s:GameState,ctx:Context,index:number){
+function availableBonusEnvelopes(s:GameState):Prize[]{
+  const finalist=s.players.find(p=>p.id===s.bonusPlayerId);
+  return finalist?.millionWedge
+    ?[...s.definition.bonus.envelopes,{label:'$1,000,000',value:1000000}]
+    :s.definition.bonus.envelopes;
+}
+function prepareBonus(s:GameState,index:number){
   s.bonusPuzzleIndex=index;
-  s.bonusEnvelopeIndex=random(ctx,s.definition.bonus.envelopes.length);
-  s.bonusLetters=[];s.revealed=BASE_BONUS.split('');s.usedLetters=BASE_BONUS.split('');
-  s.phase='bonusLetters';s.lastAction='The bonus envelope is sealed.';
+  s.bonusEnvelopeIndex=undefined;
+  s.bonusLetters=[];s.revealed=[];s.usedLetters=[];
+  s.phase='bonusSpin';s.lastAction='Category chosen. Spin the bonus wheel to pick a sealed prize.';
 }
 function awardBonus(s:GameState,ctx:Context,correct:boolean){
   if(s.bonusWon!==undefined)return;
   s.bonusWon=correct;
   if(correct&&s.bonusEnvelopeIndex!==undefined){
     const p=s.players.find(p=>p.id===s.bonusPlayerId)!;
-    const prize=s.definition.bonus.envelopes[s.bonusEnvelopeIndex];
+    const prize=availableBonusEnvelopes(s)[s.bonusEnvelopeIndex];
     p.prizes.push(structuredClone(prize));
     mark(s,ctx,p,prize.value,'Bonus Round prize: '+prize.label);
   }
@@ -371,7 +378,9 @@ export function applyCommand(original:GameState,command:Command,ctx:Context):Gam
       if(s.phase==='express')break;
       if(spin?.wedge.kind==='wild')p.wildCard=true;
       if(spin?.wedge.kind==='million')p.millionWedge=true;
-      if(spin?.wedge.kind==='mystery'){s.phase='mysteryChoice';break;}
+      if(spin?.wedge.kind==='mystery'){
+        s.mysteryCash=cash*count;s.phase='mysteryChoice';break;
+      }
       if(spin?.wedge.kind==='express'){s.phase='expressChoice';break;}
       s.phase='turn';s.pendingSpin=undefined;
       break;
@@ -379,11 +388,13 @@ export function applyCommand(original:GameState,command:Command,ctx:Context):Gam
     case 'mystery':{
       phase('mysteryChoice');const p=mustBeActive(s,ctx);
       if(command.reveal){
+        p.roundMoney-=s.mysteryCash??0;
         if(random(ctx,2)===0){s.lastAction='Mystery reveal: BANKRUPT!';bankrupt(s,p);}
         else {p.pendingPrizes.push({label:'Mystery $10,000',value:10000});
           s.lastAction=p.name+' found the $10,000 Mystery prize!';
           s.phase='turn';s.pendingSpin=undefined;}
       }else{s.lastAction=p.name+' kept the Mystery cash.';s.phase='turn';s.pendingSpin=undefined;}
+      s.mysteryCash=undefined;
       break;
     }
     case 'express':{
@@ -401,7 +412,10 @@ export function applyCommand(original:GameState,command:Command,ctx:Context):Gam
       if(normalize(command.text)===normalize(currentPuzzle(s).answer)){bankPuzzle(s,ctx,p);}
       else{
         s.lastAction=p.name+' attempted an incorrect solution.';
-        if(s.phase==='express')bankrupt(s,p);else nextPlayer(s);
+        if(s.phase==='express')bankrupt(s,p);
+        else if(s.phase==='letter'&&s.pendingSpin?.wedge.kind==='free'){
+          s.phase='turn';s.pendingSpin=undefined;
+        }else nextPlayer(s);
       }
       break;
     }
@@ -426,7 +440,18 @@ export function applyCommand(original:GameState,command:Command,ctx:Context):Gam
     case 'chooseBonus':{
       phase('bonusCategory');
       ensure(ctx.userId===s.bonusPlayerId||host,'Only the finalist can choose the bonus category.',403);
-      prepareBonus(s,ctx,command.index);break;
+      prepareBonus(s,command.index);break;
+    }
+    case 'spinBonus':{
+      phase('bonusSpin');
+      ensure(ctx.userId===s.bonusPlayerId||host,'Only the finalist can spin the bonus wheel.',403);
+      const index=random(ctx,24);
+      const wheel=wheelForRound('regular');
+      s.spin={id:crypto.randomUUID(),index,wedge:{...wheel[index],label:'BONUS'},playerId:s.bonusPlayerId!,sequence:(s.spin?.sequence??0)+1};
+      s.bonusEnvelopeIndex=random(ctx,availableBonusEnvelopes(s).length);
+      s.revealed=BASE_BONUS.split('');s.usedLetters=BASE_BONUS.split('');
+      s.phase='bonusLetters';s.lastAction='The bonus prize envelope is sealed. Choose your letters.';
+      break;
     }
     case 'bonusLetter':{
       phase('bonusLetters');
@@ -507,7 +532,7 @@ export function viewSession(s:GameState,userId:string,now:number,controller?:str
     bonusCategories:extra?s.definition.bonus.puzzles.map(p=>p.category):undefined,
     bonusLetters:s.bonusLetters,
     bonusPrize:host||['bonusResult','finished'].includes(s.phase)
-      ?s.definition.bonus.envelopes[s.bonusEnvelopeIndex??0]:undefined,
+      ?availableBonusEnvelopes(s)[s.bonusEnvelopeIndex??0]:undefined,
     bonusWon:s.bonusWon,tripleWinners:s.tripleWinners,tieEligible:s.tieEligible,
     events:s.events,paused:s.paused,pauseReason:s.pauseReason,locked:s.locked,
     controllerOwned:host&&controller===s.controller,hostConnected:now-s.hostSeen<HOST_GRACE_MS,

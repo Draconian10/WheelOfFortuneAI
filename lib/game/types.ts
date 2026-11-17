@@ -3,7 +3,7 @@ export type WedgeKind = 'cash' | 'bankrupt' | 'lose' | 'free' | 'wild' | 'myster
 export type Phase =
   | 'lobby' | 'tossup' | 'tossupAnswer' | 'turn' | 'letter' | 'mysteryChoice'
   | 'expressChoice' | 'express' | 'speedup' | 'roundResult' | 'tieTossup'
-  | 'tieAnswer' | 'bonusCategory' | 'bonusLetters' | 'bonusTimer'
+  | 'tieAnswer' | 'bonusCategory' | 'bonusSpin' | 'bonusLetters' | 'bonusTimer'
   | 'bonusResult' | 'finished' | 'ended';
 export interface Puzzle { id: string; category: string; answer: string; hint?: string; }
 export interface Prize { label: string; value: number; }
@@ -71,6 +71,7 @@ export interface GameState {
   usedLetters: string[];
   spin?: Spin;
   pendingSpin?: Spin;
+  mysteryCash?: number;
   lastAction?: string;
   deadline?: number;
   remaining?: number;
