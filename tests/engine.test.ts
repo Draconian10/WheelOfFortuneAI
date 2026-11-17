@@ -272,7 +272,7 @@ describe('flexible lobby with one to five contestants',()=>{
     s=send(s,{type:'join',name:'Solo player'},ids[0]);
     s=send(s,{type:'start'});
     s.roundIndex=1;s.phase='turn';s.currentPlayerId=ids[0];s.deadline=undefined;
-    s=send(s,{type:'spin'},ids[0],0);
+    s=spinAndSettle(s,ids[0],0);
     s=send(s,{type:'letter',letter:'Z'},ids[0]);
     expect(s.currentPlayerId).toBe(ids[0]);
     expect(s.phase).toBe('turn');
