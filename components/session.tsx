@@ -340,7 +340,7 @@ function LiveSession({id,role,displayToken}:{
               <button className="button primary" disabled={busy||s.paused}
                 onClick={()=>doSend({type:'nextRound'})}>
                 {['triple','tossup'].includes(s.roundKind)&&s.puzzleIndex+1<s.puzzlesInRound?
-                  s.roundKind==='tossup'?'Next Frenzy Puzzle':'Next Toss-Up':
+                  s.roundKind==='tossup'&&s.roundIndex===0?'Next Frenzy Puzzle':'Next Toss-Up':
                   s.roundIndex===s.totalRounds-1?'See our finalist':'Next Round'}
                 <ArrowRight size={17}/></button>
             </div>}
