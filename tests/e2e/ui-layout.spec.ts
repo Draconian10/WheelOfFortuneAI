@@ -155,3 +155,49 @@ test('lobby action area clearly distinguishes starting from ending',async({page}
   expect(colors.end).toBe('rgb(58, 36, 67)');
   await fits(page);
 });
+
+test('host PIN reclaim is compact and show controls have separate readable actions',async({page})=>{
+  await fixture(page,'container shell-section session-container',
+    '<section class="panel claim-panel">'+
+    '<div class="claim-heading"><div><h2>Reclaim host controls</h2><p>Enter your six-digit host PIN.</p></div></div>'+
+    '<form class="claim-form"><label>Host PIN</label><div class="claim-form-row"><input type="password" value="123456"/>'+
+    '<button class="button primary">Take control</button></div></form></section>'+
+    '<aside class="game-sidebar"><div class="panel host-tools"><div class="eyebrow">SHOW CONTROLS</div>'+
+    '<div class="host-action-stack"><button class="button secondary full">Pause Show</button>'+
+    '<div class="display-access display-access--sidebar"><button class="button secondary full">Audience display</button>'+
+    '<details class="display-options"><summary>•••</summary></details></div>'+
+    '<button class="button host-end-game full">End Game</button></div></div></aside>');
+  const reclaim=page.locator('.claim-panel');
+  await expect(reclaim).toBeVisible();
+  const frame=await reclaim.boundingBox();
+  expect(frame).not.toBeNull();
+  expect(frame!.width).toBeLessThanOrEqual(573);
+  const controls=page.locator('.host-action-stack>.button');
+  await expect(controls).toHaveCount(2);
+  const pause=await controls.nth(0).boundingBox(),end=await controls.nth(1).boundingBox();
+  expect(pause).not.toBeNull();expect(end).not.toBeNull();
+  expect(end!.y).toBeGreaterThan(pause!.y+pause!.height);
+  await fits(page);
+});
+test('winner text remains stationary while confetti overlay is present or removed',async({page})=>{
+  await fixture(page,'container shell-section session-container',
+    '<section class="panel celebration">'+
+    '<canvas class="results-confetti" aria-hidden="true"></canvas>'+
+    '<div class="celebration-icon">🏆</div>'+
+    '<div class="eyebrow">SHOW CHAMPION</div><h2>Jon wins!</h2>'+
+    '<p>Bonus Round: No solve this time.</p>'+
+    '<div class="standings"><h3>Final standings</h3><p>Jon: $13,000</p></div>'+
+    '</section>');
+  await expect(page.getByRole('heading',{name:'Jon wins!'})).toBeVisible();
+  const before=await page.getByRole('heading',{name:'Jon wins!'}).boundingBox();
+  const style=await page.locator('.results-confetti').evaluate(el=>{
+    const css=getComputedStyle(el);
+    return {position:css.position,pointerEvents:css.pointerEvents,zIndex:css.zIndex};
+  });
+  expect(style).toEqual({position:'fixed',pointerEvents:'none',zIndex:'100'});
+  await page.locator('.results-confetti').evaluate(el=>el.remove());
+  const after=await page.getByRole('heading',{name:'Jon wins!'}).boundingBox();
+  expect(before).not.toBeNull();expect(after).not.toBeNull();
+  expect(Math.abs(before!.y-after!.y)).toBeLessThan(1);
+  await fits(page);
+});

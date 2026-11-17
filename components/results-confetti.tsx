@@ -21,7 +21,7 @@ export default function ResultsConfetti({ sessionId }: { sessionId: string }) {
   const [active, setActive] = useState(false);
   useEffect(() => {
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    const key = `jeopardy:results-confetti:${sessionId}`;
+    const key = `fortune:results-confetti:${sessionId}`;
     try {
       if (sessionStorage.getItem(key)) return;
       sessionStorage.setItem(key, 'played');

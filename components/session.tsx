@@ -42,10 +42,14 @@ function LiveSession({id,role,displayToken}:{
   const [pin,setPin]=useState(''),[solve,setSolve]=useState(''),[showSolve,setShowSolve]=useState(false);
   const [joinUrl,setJoinUrl]=useState(''),[copied,setCopied]=useState(false);
   const [sound,setSound]=useState(false);
+  const [settledSpinId,setSettledSpinId]=useState('');
+  const spinPendingVisual=!!s?.spin?.startedAt&&
+    ['spinning','turn','letter','mysteryChoice','expressChoice','express','speedup'].includes(s.phase)&&
+    s.spin.id!==settledSpinId;
   const me=s?.players.find(p=>p.id===userId),active=s?.players.find(p=>p.id===s.currentPlayerId);
   const respondent=s?.players.find(p=>p.id===s.respondent);
   const finalist=s?.players.find(p=>p.id===s.bonusPlayerId);
-  const canAct=!!s&&connected&&!busy&&!s.paused&&(control||(player&&s.currentPlayerId===userId));
+  const canAct=!!s&&connected&&!busy&&!s.paused&&!spinPendingVisual&&(control||(player&&s.currentPlayerId===userId));
   const canBuzz=!!s&&player&&connected&&!busy&&!s.paused&&
     ['tossup','tieTossup'].includes(s.phase)&&remaining>0&&!!s.windowId&&
     !s.attempted.includes(userId)&&(s.phase!=='tieTossup'||!!s.tieEligible?.includes(userId));
@@ -77,7 +81,7 @@ function LiveSession({id,role,displayToken}:{
   },[s?.phase,sound]);
   const doSend=(command:Command)=>{void send(command);};
   const isTossup=!!s&&['tossup','tossupAnswer','tieTossup','tieAnswer'].includes(s.phase);
-  const isWheel=!!s&&['turn','letter','mysteryChoice','expressChoice','express','speedup'].includes(s.phase);
+  const isWheel=!!s&&['spinning','turn','letter','mysteryChoice','expressChoice','express','speedup'].includes(s.phase);
   const isBonus=!!s&&['bonusCategory','bonusSpin','bonusLetters','bonusTimer','bonusResult'].includes(s.phase);
   const canSolve=!!s&&['turn','express','speedup','letter'].includes(s.phase)&&canAct&&
     (s.phase!=='letter'||s.pendingSpin?.wedge.kind==='free')&&
@@ -153,12 +157,18 @@ function LiveSession({id,role,displayToken}:{
     </div>
     {headline}
     {error&&<p className="error" role="alert">{error}</p>}
-    {host&&!ended&&!control&&<section className="panel claim-panel"><h2>Reclaim the host console</h2>
-      <p className="muted">This browser is read-only until you enter the original host PIN. The current game and scores are preserved.</p>
-      <form className="button-row" onSubmit={e=>{e.preventDefault();doSend({type:'claim',pin,controller});}}>
-        <label>Host PIN<input type="password" inputMode="numeric" pattern="[0-9]{6}"
-          maxLength={6} required value={pin} onChange={e=>setPin(e.target.value.replace(/\D/g,''))}/></label>
-        <button className="button primary" disabled={busy||pin.length!==6}><Lock size={16}/> Take control</button>
+    {host&&!ended&&!control&&<section className="panel claim-panel">
+      <div className="claim-heading"><Lock size={20} aria-hidden="true"/>
+        <div><h2>Reclaim host controls</h2>
+          <p className="muted">Enter your six-digit host PIN to resume control. Your game is safe.</p></div>
+      </div>
+      <form className="claim-form" onSubmit={e=>{e.preventDefault();doSend({type:'claim',pin,controller});}}>
+        <label htmlFor="reclaim-host-pin">Host PIN</label>
+        <div className="claim-form-row">
+          <input id="reclaim-host-pin" aria-label="Six-digit host PIN" type="password" inputMode="numeric" pattern="[0-9]{6}"
+            autoComplete="off" maxLength={6} required value={pin} onChange={e=>setPin(e.target.value.replace(/\D/g,''))}/>
+          <button className="button primary" disabled={busy||pin.length!==6}><Lock size={16}/> Take control</button>
+        </div>
       </form>
     </section>}
     {s.paused&&!ended&&<div className="pause-banner"><Pause size={20}/>
@@ -225,7 +235,8 @@ function LiveSession({id,role,displayToken}:{
           </span><span className="round-title">{s.roundTitle}</span>
             {isTossup&&clock}</div>
           {!['bonusCategory','bonusSpin'].includes(s.phase)&&<PuzzleBoard s={s}/>}
-          {s.lastAction&&<p className="action-ticker" role="status"><Star size={15}/>{s.lastAction}</p>}
+          {s.lastAction&&<p className="action-ticker" role="status"><Star size={15}/>
+            {spinPendingVisual?(active?.name??'The contestant')+' is spinning the wheel…':s.lastAction}</p>}
           {isTossup&&<section className="panel phase-panel tossup-stage">
             <div className="eyebrow">{s.phase==='tieTossup'||s.phase==='tieAnswer'?'SUDDEN DEATH':'BUZZER ROUND'}</div>
             {s.phase==='tieTossup'||s.phase==='tossup'?
@@ -254,7 +265,7 @@ function LiveSession({id,role,displayToken}:{
               </>}
           </section>}
           {isWheel&&<div className="wheel-game-grid">
-            <div className="wheel-area"><Wheel kind={wheelKind} spin={s.spin}/>
+            <div className="wheel-area"><Wheel kind={wheelKind} spin={s.spin} onSpinSettled={setSettledSpinId}/>
               {s.speedupValue!==undefined&&<p className="speedup-banner">FINAL SPIN · {money(s.speedupValue)} per consonant</p>}
             </div>
             <section className="panel turn-panel">
@@ -263,7 +274,10 @@ function LiveSession({id,role,displayToken}:{
                 <div><h2>{active?.name}</h2><p className="muted">{active?.id===userId?'Your move!':'Time to make a move'}</p></div></div>
               <div className="round-money"><div><small>Round earnings</small><strong>{money(active?.roundMoney??0)}</strong></div>
                 <div><small>Secured cash</small><strong>{money(active?.banked??0)}</strong></div></div>
-              {s.phase==='turn'&&<div className="turn-actions">
+              {(s.phase==='spinning'||spinPendingVisual)&&<div className="spin-progress" role="status">
+                <RotateCcw size={17} aria-hidden="true"/> The wheel is spinning. Wait for the result.
+              </div>}
+              {s.phase==='turn'&&!spinPendingVisual&&<div className="turn-actions">
                 <button className="button primary full" disabled={!canAct} onClick={()=>doSend({type:'spin'})}>
                   <RotateCcw size={18}/> Spin the Wheel</button>
                 <button className="button secondary full" disabled={!canAct||(active?.roundMoney??0)<250}
@@ -272,7 +286,7 @@ function LiveSession({id,role,displayToken}:{
                 {control&&s.roundKind==='final'&&<button className="button secondary full"
                   onClick={()=>doSend({type:'speedUp'})}><Timer size={16}/> Start Final Spin</button>}
               </div>}
-              {s.phase==='letter'&&<>
+              {s.phase==='letter'&&!spinPendingVisual&&<>
                 <h3>{s.pendingSpin?.wedge.kind==='free'?'Free Play — choose any letter':
                   s.pendingSpin?'Call a consonant for '+s.pendingSpin.wedge.label:'Choose a vowel'}</h3>
                 {choices(s.pendingSpin?.wedge.kind==='free'?undefined:!s.pendingSpin)}
@@ -306,7 +320,7 @@ function LiveSession({id,role,displayToken}:{
                     doSend({type:'hostSolve',playerId:active.id});
                 }}>Mark spoken solution correct</button>
               </div>}
-              {!canAct&&<p className="muted tiny">Only the current contestant and controlling host can take actions.</p>}
+              {!canAct&&!spinPendingVisual&&s.phase!=='spinning'&&<p className="muted tiny">Only the current contestant and controlling host can take actions.</p>}
             </section>
           </div>}
           {s.phase==='roundResult'&&<section className="panel round-complete">
@@ -315,7 +329,10 @@ function LiveSession({id,role,displayToken}:{
             <p className="muted">The puzzle has been revealed. Here are the updated standings.</p>
             <Standings s={s}/>
             {control&&<button className="button primary" disabled={busy||s.paused}
-              onClick={()=>doSend({type:'nextRound'})}>{['triple','tossup'].includes(s.roundKind)&&s.puzzleIndex+1<s.puzzlesInRound?'Next Toss-Up':s.roundIndex===s.totalRounds-1?'See our finalist':'Next Round'}
+              onClick={()=>doSend({type:'nextRound'})}>{s.roundKind==='tossup'&&s.roundIndex===0&&s.frenzyRemaining===0?'Next Round':
+                ['triple','tossup'].includes(s.roundKind)&&s.puzzleIndex+1<s.puzzlesInRound?
+                s.roundKind==='tossup'?'Next Frenzy Puzzle':'Next Toss-Up':
+                s.roundIndex===s.totalRounds-1?'See our finalist':'Next Round'}
               <ArrowRight size={17}/></button>}
           </section>}
           {s.phase==='bonusCategory'&&<section className="panel bonus-stage">
@@ -381,18 +398,22 @@ function LiveSession({id,role,displayToken}:{
             <small>Standing #{[...s.players].sort((a,b)=>total(b)-total(a)).findIndex(p=>p.id===userId)+1} of {s.players.length}</small>
           </div>}
           {!player&&<div className="panel"><Standings s={s} compact/></div>}
-          {host&&<div className="panel host-tools"><div className="eyebrow">SHOW CONTROLS</div>
-            <div className="button-row"><button className="button secondary full" disabled={!control||busy}
-              onClick={()=>doSend({type:s.paused?'continue':'pause'})}>
-              {s.paused?<Play size={16}/>:<Pause size={16}/>}
-              {s.paused?'Continue Show':'Pause Show'}</button>
-            {s.canUndo&&<button className="button secondary full" onClick={()=>{
-              if(confirm('Undo the last judgment? The show will pause for review.'))doSend({type:'undo'});
-            }}><RotateCcw size={16}/> Undo Judgment</button>}</div>
-            <DisplayAccess sessionId={id}/>
-            {!ended&&<button className="text-button danger-text" disabled={!control}
-              onClick={()=>{if(confirm('Permanently end this game and save results?'))doSend({type:'end'});}}>
-              End Game</button>}
+          {host&&<div className="panel host-tools">
+            <div className="eyebrow">SHOW CONTROLS</div>
+            <div className="host-action-stack">
+              <button className="button secondary full" disabled={!control||busy}
+                onClick={()=>doSend({type:s.paused?'continue':'pause'})}>
+                {s.paused?<Play size={16}/>:<Pause size={16}/>}
+                {s.paused?'Continue Show':'Pause Show'}</button>
+              {s.canUndo&&<button className="button secondary full" disabled={!control||busy} onClick={()=>{
+                if(confirm('Undo the last judgment? The show will pause for review.'))doSend({type:'undo'});
+              }}><RotateCcw size={16}/> Undo Judgment</button>}
+              <DisplayAccess sessionId={id}/>
+              {!ended&&<button className="button host-end-game full" disabled={!control||busy}
+                onClick={()=>{if(confirm('End this game and save the current standings? This cannot be undone.'))doSend({type:'end'});}}>
+                <X size={16}/> End Game
+              </button>}
+            </div>
           </div>}
           {host&&!ended&&<RecoveryRequests sessionId={id} onApproved={refresh}/>}
           {player&&<div className="panel player-instruction">

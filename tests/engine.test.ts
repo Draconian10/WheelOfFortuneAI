@@ -1,7 +1,7 @@
 import {describe,it,expect} from 'vitest';
 import {starterGame,emptyGame} from '@/lib/game/starter';
 import {playable,gameSchema} from '@/lib/game/schema';
-import {newSession,applyCommand,viewSession,reconcile,total,MIN_PLAYERS,MAX_PLAYERS,activePlayers} from '@/lib/game/engine';
+import {newSession,applyCommand,viewSession,reconcile,total,MIN_PLAYERS,MAX_PLAYERS,activePlayers,SPIN_DURATION_MS} from '@/lib/game/engine';
 import type {GameState,Context} from '@/lib/game/types';
 import type {Command} from '@/lib/game/schema';
 const HOST='00000000-0000-4000-8000-000000000001';
@@ -17,6 +17,14 @@ function ctx(s:GameState,user=HOST,index=0,time=START+counter++*50):Context {
 }
 function send(s:GameState,command:Command,user=HOST,index=0,time?:number){
   return applyCommand(s,command,ctx(s,user,index,time));
+}
+function spinAndSettle(s:GameState,user=PLAYERS[0],index=0){
+  const started=send(s,{type:'spin'},user,index);
+  expect(started.phase).toBe('spinning');
+  expect(started.spinEndsAt).toBeDefined();
+  const next=structuredClone(started);
+  reconcile(next,started.spinEndsAt!+1);
+  return next;
 }
 function joined(){
   let s=newSession(starterGame(),'00000000-0000-4000-8000-000000000010',HOST,'030405',START,CONTROLLER);
@@ -61,10 +69,16 @@ describe('live buzzer arbitration and privacy',()=>{
     expect(s.players[0].banked).toBe(1000);
     expect(s.windowId).not.toBe(window);
   });
-  it('advances Fortune Frenzy immediately after a wrong answer',()=>{
+  it('holds each Fortune Frenzy question until the host starts the next one',()=>{
     let s=starting();
+    const firstPuzzle=s.definition.rounds[0].puzzles[0].answer;
     s=send(s,{type:'buzz',windowId:s.windowId!},PLAYERS[0]);
     s=send(s,{type:'judgeBuzz',correct:false});
+    expect(s.phase).toBe('roundResult');
+    expect(s.puzzleIndex).toBe(0);
+    expect(s.definition.rounds[0].puzzles[0].answer).toBe(firstPuzzle);
+    expect(s.frenzyRemaining).toBeGreaterThan(0);
+    s=send(s,{type:'nextRound'});
     expect(s.phase).toBe('tossup');expect(s.puzzleIndex).toBe(1);
   });
   it('excludes private solutions from player and audience projections',()=>{
@@ -77,7 +91,7 @@ describe('live buzzer arbitration and privacy',()=>{
 describe('wheel scoring',()=>{
   it('awards every consonant, deducts vowel cost, then banks on a solve',()=>{
     let s=regular();
-    s=send(s,{type:'spin'},PLAYERS[0],0);
+    s=spinAndSettle(s,PLAYERS[0],0);
     s=send(s,{type:'letter',letter:'T'},PLAYERS[0]);
     expect(s.players[0].roundMoney).toBe(1500);
     expect(s.players[0].banked).toBe(0);
@@ -90,26 +104,26 @@ describe('wheel scoring',()=>{
   });
   it('Bankrupt erases unbanked earnings but not secured winnings',()=>{
     let s=regular();s.players[0].banked=4500;s.players[0].roundMoney=1800;
-    s=send(s,{type:'spin'},PLAYERS[0],8);
+    s=spinAndSettle(s,PLAYERS[0],8);
     expect(s.players[0].banked).toBe(4500);
     expect(s.players[0].roundMoney).toBe(0);
     expect(s.currentPlayerId).toBe(PLAYERS[1]);
   });
   it('passes the turn after a wrong letter',()=>{
-    let s=regular();s=send(s,{type:'spin'},PLAYERS[0],0);
+    let s=regular();s=spinAndSettle(s,PLAYERS[0],0);
     s=send(s,{type:'letter',letter:'Z'},PLAYERS[0]);
     expect(s.currentPlayerId).toBe(PLAYERS[1]);
   });
   it('offers Mystery cash or a separately secured prize',()=>{
     let s=regular();s.roundIndex=2;
-    s=send(s,{type:'spin'},PLAYERS[0],5);
+    s=spinAndSettle(s,PLAYERS[0],5);
     s=send(s,{type:'letter',letter:'N'},PLAYERS[0]);
     expect(s.phase).toBe('mysteryChoice');
     s=send(s,{type:'mystery',reveal:true},PLAYERS[0],1);
     expect(s.players[0].pendingPrizes[0].value).toBe(10000);
   });
   it('Express incorrect letters cause Bankrupt and change turns',()=>{
-    let s=regular();s.roundIndex=3;s=send(s,{type:'spin'},PLAYERS[0],6);
+    let s=regular();s.roundIndex=3;s=spinAndSettle(s,PLAYERS[0],6);
     s=send(s,{type:'letter',letter:'P'},PLAYERS[0]);
     expect(s.phase).toBe('expressChoice');
     s=send(s,{type:'express',accept:true},PLAYERS[0]);
@@ -220,7 +234,7 @@ describe('judgment corrections',()=>{
 describe('special wedge coverage',()=>{
   it('includes the Lose a Turn wedge and preserves the contestant round bank',()=>{
     let s=regular();s.players[0].roundMoney=1700;
-    s=send(s,{type:'spin'},PLAYERS[0],9);
+    s=spinAndSettle(s,PLAYERS[0],9);
     expect(s.spin?.wedge.kind).toBe('lose');
     expect(s.currentPlayerId).toBe(PLAYERS[1]);
     expect(s.players[0].roundMoney).toBe(1700);
@@ -258,7 +272,7 @@ describe('flexible lobby with one to five contestants',()=>{
     s=send(s,{type:'join',name:'Solo player'},ids[0]);
     s=send(s,{type:'start'});
     s.roundIndex=1;s.phase='turn';s.currentPlayerId=ids[0];s.deadline=undefined;
-    s=send(s,{type:'spin'},ids[0],0);
+    s=spinAndSettle(s,ids[0],0);
     s=send(s,{type:'letter',letter:'Z'},ids[0]);
     expect(s.currentPlayerId).toBe(ids[0]);
     expect(s.phase).toBe('turn');
@@ -304,5 +318,60 @@ describe('ending a session safely from the lobby',()=>{
     s=send(s,{type:'end'});
     expect(s.phase).toBe('ended');
     expect(s.closedInLobby).toBe(false);
+  });
+});
+
+describe('server-authoritative wheel animation and Frenzy progression',()=>{
+  it('does not apply BANKRUPT until the wheel finishes, including for a solo player',()=>{
+    let s=regular();
+    s.players[0].roundMoney=2300;
+    s=send(s,{type:'spin'},PLAYERS[0],8);
+    expect(s.phase).toBe('spinning');
+    expect(s.spinEndsAt!-s.spin!.startedAt!).toBe(SPIN_DURATION_MS);
+    expect(s.players[0].roundMoney).toBe(2300);
+    expect(s.currentPlayerId).toBe(PLAYERS[0]);
+    expect(s.lastAction).not.toContain('BANKRUPT');
+    expect(()=>send(s,{type:'letter',letter:'T'},PLAYERS[0])).toThrow();
+    let before=structuredClone(s);
+    reconcile(before,s.spinEndsAt!-1);
+    expect(before.phase).toBe('spinning');
+    reconcile(before,s.spinEndsAt!+1);
+    expect(before.phase).toBe('turn');
+    expect(before.lastAction).toContain('BANKRUPT');
+    expect(before.players[0].roundMoney).toBe(0);
+    expect(before.currentPlayerId).toBe(PLAYERS[1]);
+  });
+  it('preserves a cash wedge until the animation ends then enables the letter',()=>{
+    let s=regular();
+    s=send(s,{type:'spin'},PLAYERS[0],0);
+    expect(s.phase).toBe('spinning');
+    reconcile(s,s.spinEndsAt!+1);
+    expect(s.phase).toBe('letter');
+    expect(s.pendingSpin?.wedge.kind).toBe('cash');
+    s=send(s,{type:'letter',letter:'T'},PLAYERS[0]);
+    expect(s.players[0].roundMoney).toBe(1500);
+  });
+  it('preserves the remaining Frenzy clock through the host standings pause',()=>{
+    let s=starting();
+    s=send(s,{type:'buzz',windowId:s.windowId!},PLAYERS[0]);
+    const carry=s.remaining!;
+    s=send(s,{type:'judgeBuzz',correct:true});
+    expect(s.phase).toBe('roundResult');
+    expect(s.puzzleIndex).toBe(0);
+    expect(s.players[0].banked).toBe(1000);
+    expect(s.frenzyRemaining).toBe(carry);
+    expect(s.deadline).toBeUndefined();
+    s=send(s,{type:'nextRound'});
+    expect(s.puzzleIndex).toBe(1);
+    expect(s.deadline!-s.updatedAt).toBe(carry);
+  });
+  it('does not force another Frenzy puzzle after the shared clock expires',()=>{
+    const s=starting();
+    s.hostSeen=s.deadline!+30000;
+    reconcile(s,s.deadline!+1);
+    expect(s.frenzyRemaining).toBe(0);
+    const next=send(s,{type:'nextRound'});
+    expect(next.roundIndex).toBe(1);
+    expect(next.phase).toBe('turn');
   });
 });
