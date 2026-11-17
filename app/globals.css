@@ -540,3 +540,7 @@ body:has(.audience-container){background:#070e2d}
 .audience-container .puzzle-tile{width:clamp(32px,4.1vw,68px);height:clamp(49px,6vw,83px)}
 .audience-container .puzzle-category{font-size:clamp(1.8rem,3vw,3rem)}
 @media(max-width:850px){.audience-container .game-layout{grid-template-columns:1fr}}
+
+/* Keep the sealed bonus wheel prominent and responsive on every screen. */
+.bonus-wheel{width:min(100%,460px);margin-inline:auto;display:flex;justify-content:center}
+.bonus-wheel .wheel-assembly{max-width:460px;min-width:0}
