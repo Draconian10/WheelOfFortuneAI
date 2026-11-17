@@ -2,11 +2,12 @@ import {expect,test,type Page} from '@playwright/test';
 
 async function fixture(page:Page,classNames:string,html:string){
   await page.goto('/');
-  // Let React hydrate the real homepage before replacing the DOM with a layout
-  // fixture. Otherwise the delayed hydration undoes the injected markup.
+  // The fixture must wait until React owns the SSR wheel before replacing main.
   await page.waitForFunction(()=>{
     const wheel=document.querySelector('.wheel-disc');
-    return !!wheel&&Object.keys(wheel).some(key=>key.startsWith('__reactFiber
+    return Boolean(wheel)&&Object.keys(wheel as Element).some(key=>key.startsWith('__reactFiber'));
+  },null,{timeout:20000});
+  await page.evaluate(({classNames,html})=>{
     const main=document.querySelector('main');
     if(!main)throw new Error('Missing main content.');
     main.className=classNames;
