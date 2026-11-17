@@ -101,7 +101,10 @@ export function useRoom(id:string,role:'host'|'player'|'audience',displayToken?:
       // letters even when every client is already subscribed to Realtime.
       const phase=reference.current?.phase;
       const timedReveal=phase==='tossup'||phase==='tieTossup';
-      const delay=role==='audience'&&displayToken?2500
+      // A 4.2-second server-authoritative spin must be reconciled promptly
+      // even when subscribed to Realtime (which only announces saved changes).
+      const spinning=phase==='spinning';
+      const delay=spinning?1200:role==='audience'&&displayToken?2500
         :timedReveal?2200:realtimeRef.current?10000:3000;
       timer=setTimeout(async()=>{await refresh();if(!stop)poll();},delay+Math.random()*250);
     };
