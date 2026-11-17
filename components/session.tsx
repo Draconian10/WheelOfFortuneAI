@@ -11,7 +11,7 @@ import {HostAuth,SetupNotice} from './auth';
 import {api,configured,money} from '@/lib/client';
 import type {Command} from '@/lib/game/schema';
 import type {SessionView} from '@/lib/game/types';
-import {total} from '@/lib/game/engine';
+import {MAX_PLAYERS,MIN_PLAYERS,total} from '@/lib/game/engine';
 import {useRoom} from './use-room';
 import Wheel from './wheel';
 import PuzzleBoard from './puzzle-board';
@@ -179,14 +179,14 @@ function LiveSession({id,role,displayToken}:{
           {control&&<div className="lobby-actions">
             <button className="button secondary full" onClick={()=>doSend({type:'lockLobby',locked:!s.locked})}>
               {s.locked?<Unlock size={17}/>:<Lock size={17}/>} {s.locked?'Unlock Lobby':'Lock Lobby'}</button>
-            <button className="button primary full" disabled={busy||s.paused||s.players.length!==3}
+            <button className="button primary full" disabled={busy||s.paused||s.players.length<MIN_PLAYERS}
               onClick={()=>doSend({type:'start'})}><Play size={18}/> Start the Show</button>
-            <p className="muted tiny">Exactly three contestants must be seated before starting.</p>
+            <p className="muted tiny">Start anytime with {MIN_PLAYERS}–{MAX_PLAYERS} contestants. You don't need a full lobby.</p>
           </div>}
           {host&&<DisplayAccess sessionId={id} placement="lobby"/>}
         </section>
         <section className="panel lobby-players"><div className="section-heading"><h2>Our contestants</h2>
-          <span className="count">{s.players.length}/3</span></div>
+          <span className="count" aria-label={`${s.players.length} out of ${MAX_PLAYERS} contestant seats filled`}>{s.players.length}/{MAX_PLAYERS}</span></div>
           {s.players.length?s.players.map(p=><div className="lobby-player" key={p.id}>
             <span className={'avatar seat-'+p.seat}>{p.name.charAt(0).toUpperCase()}</span>
             <div><strong>{p.name}{p.id===userId?' (you)':''}</strong>
@@ -195,8 +195,14 @@ function LiveSession({id,role,displayToken}:{
             {control&&<button className="icon-button" title={'Remove '+p.name}
               onClick={()=>{if(confirm('Remove '+p.name+' from the lobby?'))doSend({type:'remove',playerId:p.id});}}><X size={16}/></button>}
           </div>):<div className="empty-players">The first contestant will appear here.</div>}
-          <div className="waiting-bar"><span style={{width:(s.players.length/3*100)+'%'}}/></div>
-          <p className="muted tiny">{s.players.length===3?'All contestants are ready. Let the games begin!':'Waiting for '+(3-s.players.length)+' more contestant(s)…'}</p>
+          <div className="waiting-bar" role="progressbar" aria-label="Contestant seats filled"
+            aria-valuenow={s.players.length} aria-valuemin={0} aria-valuemax={MAX_PLAYERS}>
+            <span style={{width:(s.players.length/MAX_PLAYERS*100)+'%'}}/></div>
+          <p className="muted tiny">{s.players.length===0?
+            'Waiting for the first contestant to join…':
+            s.players.length===MAX_PLAYERS?
+            'The lobby is full. Everyone is ready to play!':
+            `${s.players.length} ready · ${MAX_PLAYERS-s.players.length} open ${MAX_PLAYERS-s.players.length===1?'seat':'seats'}. The host can start now.`}</p>
         </section>
       </div>:
       <div className={'game-layout '+(isBonus?'bonus-layout':'')}>

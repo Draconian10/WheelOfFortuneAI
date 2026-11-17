@@ -18,7 +18,7 @@ export default function Join(){
   return <main className="container join-layout">
     <div className="join-story"><div className="eyebrow">STEP INTO THE SPOTLIGHT</div>
       <h1>It's your turn to <span className="gold-text">shine.</span></h1>
-      <p className="muted">Three contestants. One brilliant wheel. Your phone is the buzzer, letter board, and personal scoreboard.</p>
+      <p className="muted">Up to five contestants. One brilliant wheel. Your phone is the buzzer, letter board, and personal scoreboard.</p>
       <div className="join-icon"><Smartphone size={72}/><Zap size={48} fill="currentColor"/></div></div>
     <div className="join-main"><PlayerGames/>
       <form className="panel join-card" onSubmit={async e=>{
@@ -50,7 +50,7 @@ export default function Join(){
         {error&&<p className="error" role="alert">{error}</p>}
         <button className="button primary full" disabled={busy||code.length!==6||!name.trim()}>
           {busy?'Joining…':'Join Game'}<ArrowRight size={17}/></button>
-        <p className="muted tiny"><Users size={15}/> No account needed. The host will start when all three contestants arrive.</p>
+        <p className="muted tiny"><Users size={15}/> No account needed. The host can start once at least one contestant has joined.</p>
       </form>
       <RecoveryJoin initialCode={code}/>
     </div>

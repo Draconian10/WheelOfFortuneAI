@@ -1,6 +1,5 @@
 'use client';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import Link from 'next/link';
 import { Copy, Monitor, MoreHorizontal, RefreshCw } from 'lucide-react';
 import { api } from '@/lib/client';
 
@@ -112,6 +111,25 @@ export default function DisplayAccess({
     [sessionId, storageKey],
   );
 
+  const openDisplay = async () => {
+    // Create the new tab during the click gesture so popup blockers do not
+    // interfere with the asynchronous private-token request.
+    const tab = window.open('about:blank', '_blank');
+    if (tab) tab.opener = null;
+    setBusy(true);
+    setError('');
+    try {
+      const link = await getLink();
+      if (tab) tab.location.replace(link.url);
+      else setError('Allow popups for this site or use the options menu to copy the audience link.');
+    } catch (cause) {
+      tab?.close();
+      setError((cause as Error).message || 'Could not open the audience display.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const copyDisplay = async () => {
     setBusy(true);
     setError('');
@@ -148,16 +166,16 @@ export default function DisplayAccess({
 
   return (
     <div className={`display-access display-access--${placement}`}>
-      <Link
-        href={`/display/${sessionId}`}
-        target="_blank"
-        rel="noopener noreferrer"
+      <button
+        type="button"
+        disabled={busy}
         className={placement === 'lobby' ? 'text-button' : 'button secondary full'}
-        onClick={() => setError('')}
+        onClick={() => void openDisplay()}
+        aria-label="Open audience display in a new tab"
       >
-        <Monitor size={16} />
-        {placement === 'lobby' ? 'Open audience display' : 'Audience display'}
-      </Link>
+        <Monitor size={16} aria-hidden="true" />
+        {busy ? 'Opening display…' : placement === 'lobby' ? 'Open audience display' : 'Audience display'}
+      </button>
       <details className="display-options" ref={menuRef}>
         <summary aria-label="Audience display options" title="Audience display options">
           <MoreHorizontal size={18} aria-hidden="true" />

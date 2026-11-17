@@ -20,7 +20,7 @@ export default function Home(){
             <span>Join the Fun <ArrowRight size={18}/></span>
           </Link>
         </div>
-        <div className="hero-features"><span><Users size={17}/> 3 live contestants</span>
+        <div className="hero-features"><span><Users size={17}/> 1–5 live contestants</span>
           <span><RadioTower size={17}/> Real-time buzzers</span>
           <span><Trophy size={17}/> Animated standings</span></div>
       </div>

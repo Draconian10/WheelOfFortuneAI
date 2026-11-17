@@ -1,6 +1,6 @@
 # Fortune Live
 
-Fortune Live is a Vercel-ready, colorful multiplayer word puzzle show. One host controls the show from a laptop, three contestants participate from their phones, and a read-only audience display works on a projector.
+Fortune Live is a Vercel-ready, colorful multiplayer word puzzle show. One host controls the show from a laptop, between one and five contestants participate from their phones, and a read-only audience display works on a projector.
 
 It is a separate project built from the architectural patterns of the JeopardyAI application. No Jeopardy repository files were changed.
 
@@ -34,8 +34,9 @@ NEVER expose the SUPABASE_SERVICE_ROLE_KEY to a browser. All client requests use
 - npm run typecheck
 - npm test
 - npm run build
+- npm run test:e2e
 
-The game is intended for three active contestants in the television-inspired format. Rehearse with the real laptops, phones and projector before a live event, especially simultaneous buzzes, Wi-Fi disconnections, prize scoring and host takeover.
+The lobby supports 1–5 active contestants (not including the host or audience). A host can start immediately after the first contestant joins; additional players can join until the game starts or five seats are occupied. Solo play rotates back to the same contestant and multiplayer turn order follows the joined seats. Rehearse with the real laptops, phones and projector before a live event, especially simultaneous buzzes, Wi-Fi disconnections, prize scoring and host takeover.
 
 ## Wheel art
 

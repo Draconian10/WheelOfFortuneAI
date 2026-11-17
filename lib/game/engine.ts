@@ -5,6 +5,9 @@ import { secureIndex, wheelForRound } from './wheel';
 
 export const HOST_GRACE_MS = 30000;
 export const TOSSUP_MS = 30000;
+/** Live sessions support one to five contestants; a full lobby is never required to begin. */
+export const MIN_PLAYERS = 1;
+export const MAX_PLAYERS = 5;
 const VOWELS = 'AEIOU';
 const BASE_BONUS = 'RSTLNE';
 const HOST_COMMANDS = new Set([
@@ -247,10 +250,10 @@ export function applyCommand(original:GameState,command:Command,ctx:Context):Gam
       const existing=s.players.find(p=>p.id===ctx.userId);
       if(existing){ensure(!existing.removed,'Your seat was removed.',403);existing.lastSeen=ctx.now;break;}
       phase('lobby');ensure(!s.locked,'The lobby is locked.');
-      ensure(activePlayers(s).length<3,'This traditional game already has three contestants.');
+      ensure(activePlayers(s).length<MAX_PLAYERS,'This game has reached the five-contestant limit.');
       ensure(!activePlayers(s).some(p=>p.name.toLowerCase()===command.name.trim().toLowerCase()),'That name is taken.');
       const used=activePlayers(s).map(p=>p.seat);
-      const seat=[0,1,2].find(n=>!used.includes(n))!;
+      const seat=Array.from({length:MAX_PLAYERS},(_,i)=>i).find(n=>!used.includes(n))!;
       s.players.push({id:ctx.userId,name:command.name.trim(),seat,banked:0,roundMoney:0,prizes:[],pendingPrizes:[],
         wildCard:false,millionWedge:false,removed:false,lastSeen:ctx.now});
       break;
@@ -281,9 +284,10 @@ export function applyCommand(original:GameState,command:Command,ctx:Context):Gam
       ensure(p,'Player not found.');p.removed=true;break;
     }
     case 'start':
-      phase('lobby');ensure(activePlayers(s).length===3,'Three contestants must join before starting.');
+      phase('lobby');ensure(activePlayers(s).length>=MIN_PLAYERS,'At least one contestant must join before starting.');
       s.locked=true;s.roundIndex=0;s.puzzleIndex=0;
-      s.roundStarterId=activePlayers(s)[random(ctx,3)].id;setRound(s,ctx);
+      const players=activePlayers(s);
+      s.roundStarterId=players[random(ctx,players.length)].id;setRound(s,ctx);
       break;
     case 'revealLetter':{
       phase('tossup','tieTossup');

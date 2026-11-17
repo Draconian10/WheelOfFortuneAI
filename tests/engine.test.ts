@@ -1,12 +1,14 @@
 import {describe,it,expect} from 'vitest';
 import {starterGame,emptyGame} from '@/lib/game/starter';
 import {playable,gameSchema} from '@/lib/game/schema';
-import {newSession,applyCommand,viewSession,reconcile,total} from '@/lib/game/engine';
+import {newSession,applyCommand,viewSession,reconcile,total,MIN_PLAYERS,MAX_PLAYERS,activePlayers} from '@/lib/game/engine';
 import type {GameState,Context} from '@/lib/game/types';
 import type {Command} from '@/lib/game/schema';
 const HOST='00000000-0000-4000-8000-000000000001';
 const PLAYERS=['00000000-0000-4000-8000-000000000002','00000000-0000-4000-8000-000000000003','00000000-0000-4000-8000-000000000004'];
 const CONTROLLER='00000000-0000-4000-8000-000000000005';
+const EXTRA_PLAYERS=['00000000-0000-4000-8000-000000000006','00000000-0000-4000-8000-000000000007'];
+const SIXTH_PLAYER='00000000-0000-4000-8000-000000000008';
 const START=1763350000000;
 let counter=0;
 function ctx(s:GameState,user=HOST,index=0,time=START+counter++*50):Context {
@@ -39,13 +41,14 @@ describe('game authoring',()=>{
     expect(gameSchema.safeParse(d).success).toBe(true);
     expect(()=>playable(d)).toThrow('Complete every puzzle');
   });
-  it('requires three players, locks the lobby and rejects late joins',()=>{
+  it('requires at least one contestant and locks late joins after starting',()=>{
     let s=newSession(starterGame(),'game',HOST,'123456',START,CONTROLLER);
-    expect(()=>send(s,{type:'start'})).toThrow('Three contestants');
-    for(let i=0;i<3;i++)s=send(s,{type:'join',name:'Player'+i},PLAYERS[i]);
+    expect(()=>send(s,{type:'start'})).toThrow('At least one contestant');
+    s=send(s,{type:'join',name:'Solo'},PLAYERS[0]);
     s=send(s,{type:'start'});
     expect(s.phase).toBe('tossup');
-    expect(()=>send(s,{type:'join',name:'Late'},'late-user')).toThrow();
+    expect(s.roundStarterId).toBe(PLAYERS[0]);
+    expect(()=>send(s,{type:'join',name:'Late'},PLAYERS[1])).toThrow();
   });
 });
 describe('live buzzer arbitration and privacy',()=>{
@@ -221,5 +224,55 @@ describe('special wedge coverage',()=>{
     expect(s.spin?.wedge.kind).toBe('lose');
     expect(s.currentPlayerId).toBe(PLAYERS[1]);
     expect(s.players[0].roundMoney).toBe(1700);
+  });
+});
+
+
+describe('flexible lobby with one to five contestants',()=>{
+  const ids=[...PLAYERS,...EXTRA_PLAYERS];
+  it('permits starting with each size from one through five without waiting for a full lobby',()=>{
+    expect(MIN_PLAYERS).toBe(1);expect(MAX_PLAYERS).toBe(5);
+    for(let count=MIN_PLAYERS;count<=MAX_PLAYERS;count++){
+      let s=newSession(starterGame(),'game',HOST,'1000'+count+count,START,CONTROLLER);
+      for(let i=0;i<count;i++)s=send(s,{type:'join',name:'Player '+(i+1)},ids[i]);
+      expect(activePlayers(s)).toHaveLength(count);
+      s=send(s,{type:'start'},HOST,count-1);
+      expect(s.phase).toBe('tossup');
+      expect(s.roundStarterId).toBe(ids[count-1]);
+      expect(s.players.map(p=>p.seat)).toEqual(Array.from({length:count},(_,i)=>i));
+    }
+  });
+  it('blocks the sixth player and reuses seats removed before launch',()=>{
+    let s=newSession(starterGame(),'game',HOST,'234567',START,CONTROLLER);
+    for(let i=0;i<MAX_PLAYERS;i++)s=send(s,{type:'join',name:'Contestant '+(i+1)},ids[i]);
+    expect(activePlayers(s)).toHaveLength(MAX_PLAYERS);
+    expect(()=>send(s,{type:'join',name:'Overflow'},SIXTH_PLAYER)).toThrow('five-contestant limit');
+    s=send(s,{type:'remove',playerId:ids[2]});
+    expect(activePlayers(s)).toHaveLength(MAX_PLAYERS-1);
+    s=send(s,{type:'join',name:'Replacement'},SIXTH_PLAYER);
+    expect(s.players.find(p=>p.id===SIXTH_PLAYER)?.seat).toBe(2);
+    expect(activePlayers(s).map(p=>p.seat)).toEqual([0,1,2,3,4]);
+  });
+  it('has a functional solo turn loop rather than losing the active player',()=>{
+    let s=newSession(starterGame(),'game',HOST,'667788',START,CONTROLLER);
+    s=send(s,{type:'join',name:'Solo player'},ids[0]);
+    s=send(s,{type:'start'});
+    s.roundIndex=1;s.phase='turn';s.currentPlayerId=ids[0];s.deadline=undefined;
+    s=send(s,{type:'spin'},ids[0],0);
+    s=send(s,{type:'letter',letter:'Z'},ids[0]);
+    expect(s.currentPlayerId).toBe(ids[0]);
+    expect(s.phase).toBe('turn');
+  });
+  it('accepts the first buzz and rejects other contestants in a five-player session',()=>{
+    let s=newSession(starterGame(),'game',HOST,'998877',START,CONTROLLER);
+    for(let i=0;i<MAX_PLAYERS;i++)s=send(s,{type:'join',name:'Player '+i},ids[i]);
+    s=send(s,{type:'start'});
+    const window=s.windowId!;
+    s=send(s,{type:'buzz',windowId:window},ids[4]);
+    expect(s.respondent).toBe(ids[4]);
+    for(const id of ids.slice(0,4))
+      expect(()=>send(s,{type:'buzz',windowId:window},id)).toThrow();
+    s=send(s,{type:'judgeBuzz',correct:true});
+    expect(s.players.find(p=>p.id===ids[4])?.banked).toBe(1000);
   });
 });
