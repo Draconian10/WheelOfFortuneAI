@@ -68,7 +68,7 @@ function nextPlayer(s:GameState){
 }
 function finishRound(s:GameState){
   s.phase='roundResult';s.deadline=undefined;s.remaining=undefined;
-  s.respondent=undefined;s.windowId=undefined;s.pendingSpin=undefined;s.undo=undefined;
+  s.respondent=undefined;s.windowId=undefined;s.pendingSpin=undefined;
   s.speedupCanSolve=false;
 }
 function setRound(s:GameState,ctx:Context){
@@ -115,9 +115,9 @@ function completedTossup(s:GameState,ctx:Context,player:Player){
       s.tripleWinners.every(id=>id===player.id))
       addBanked(s,player,4000,ctx,'Triple Toss-Up sweep bonus');
   }
-  if(round?.kind==='triple'){
+  if(round?.kind==='triple'||(round?.kind==='tossup'&&s.definition.opening==='traditional')){
     s.revealed=[...new Set(currentPuzzle(s).answer.toUpperCase().match(/[A-Z]/g)??[])];
-    s.lastAction=player.name+' solved a $2,000 Toss-Up!';
+    s.lastAction=player.name+' solved a Toss-Up!';
     finishRound(s);
   }else advanceTossup(s,ctx);
 }
@@ -338,7 +338,7 @@ export function applyCommand(original:GameState,command:Command,ctx:Context):Gam
     }
     case 'nextRound':{
       phase('roundResult');
-      if(currentRound(s)?.kind==='triple'&&s.puzzleIndex+1<currentRound(s)!.puzzles.length){
+      if(['triple','tossup'].includes(currentRound(s)?.kind??'')&&s.puzzleIndex+1<currentRound(s)!.puzzles.length){
         advanceTossup(s,ctx);
       }else if(s.roundIndex===s.definition.rounds.length-1){
         const players=activePlayers(s),high=Math.max(...players.map(total)),leaders=players.filter(p=>total(p)===high);
@@ -506,11 +506,13 @@ export function applyCommand(original:GameState,command:Command,ctx:Context):Gam
       phase('bonusTimer');
       ensure(ctx.userId===s.bonusPlayerId,'Only the finalist can submit a solution.',403);
       ensure(s.deadline!==undefined&&ctx.now<s.deadline,'Bonus time expired.',409);
+      checkpoint(s);
       awardBonus(s,ctx,normalize(command.text)===normalize(currentPuzzle(s).answer));
       break;
     }
     case 'bonusJudge':{
       phase('bonusTimer');ensure(s.deadline!==undefined&&ctx.now<s.deadline,'Bonus time expired.',409);
+      checkpoint(s);
       awardBonus(s,ctx,command.correct);break;
     }
     case 'finish':phase('bonusResult');s.phase='finished';s.locked=true;break;
@@ -560,7 +562,7 @@ export function viewSession(s:GameState,userId:string,now:number,controller?:str
     speedupCanSolve:s.speedupCanSolve,bonusPlayerId:s.bonusPlayerId,bonusPuzzleIndex:s.bonusPuzzleIndex,
     bonusCategories:extra?s.definition.bonus.puzzles.map(p=>p.category):undefined,
     bonusLetters:s.bonusLetters,
-    bonusPrize:s.bonusEnvelopeIndex!==undefined&&(host||['bonusResult','finished'].includes(s.phase))
+    bonusPrize:s.bonusEnvelopeIndex!==undefined&&['bonusResult','finished','ended'].includes(s.phase)
       ?availableBonusEnvelopes(s)[s.bonusEnvelopeIndex]:undefined,
     bonusWon:s.bonusWon,tripleWinners:s.tripleWinners,tieEligible:s.tieEligible,
     events:s.events,paused:s.paused,pauseReason:s.pauseReason,locked:s.locked,

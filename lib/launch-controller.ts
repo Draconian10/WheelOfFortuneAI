@@ -3,7 +3,7 @@ const pending = new Map<string, string>();
 export function handoffController(id: string, controller: string) {
   pending.set(id, controller);
   try {
-    sessionStorage.setItem(`jeopardy:launch:${id}`, controller);
+    sessionStorage.setItem(`fortune:launch:${id}`, controller);
   } catch {
     /* Memory handles client navigation when storage is unavailable. */
   }
@@ -12,8 +12,8 @@ export function takeLaunchController(id: string): string | undefined {
   let controller = pending.get(id);
   pending.delete(id);
   try {
-    controller ??= sessionStorage.getItem(`jeopardy:launch:${id}`) ?? undefined;
-    sessionStorage.removeItem(`jeopardy:launch:${id}`);
+    controller ??= sessionStorage.getItem(`fortune:launch:${id}`) ?? undefined;
+    sessionStorage.removeItem(`fortune:launch:${id}`);
   } catch {
     /* Fall back to the in-memory handoff. */
   }

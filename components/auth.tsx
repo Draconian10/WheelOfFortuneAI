@@ -119,7 +119,7 @@ export function HostAuth({ children }: { children: (user: User) => React.ReactNo
             We sent a confirmation link to <strong>{pendingEmail}</strong>. Verify your address,
             then sign in to host.
           </p>
-          <p className="muted">The link returns to Jeopardy. No Vercel account is needed.</p>
+          <p className="muted">The link returns to Fortune Live. No Vercel account is needed.</p>
           <p role="alert" className="error">
             {error}
           </p>

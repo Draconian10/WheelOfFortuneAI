@@ -35,7 +35,7 @@ export default function DisplayAccess({
   const stored = useRef<StoredLink | null>(null);
   const pending = useRef<Promise<StoredLink> | null>(null);
   const menuRef = useRef<HTMLDetailsElement>(null);
-  const storageKey = `jeopardy:audience-display:${sessionId}`;
+  const storageKey = `fortune:audience-display:${sessionId}`;
 
   useEffect(() => {
     try {
