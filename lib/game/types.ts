@@ -74,6 +74,9 @@ export interface GameState {
   mysteryCash?: number;
   lastAction?: string;
   deadline?: number;
+  puzzleStartedAt?: number;
+  answerStartedAt?: number;
+  pausedAt?: number;
   remaining?: number;
   speedupValue?: number;
   speedupCanSolve?: boolean;

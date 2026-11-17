@@ -44,7 +44,7 @@ export function newSession(definition:GameDefinition,gameId:string,hostId:string
 }
 function mark(s:GameState,ctx:Context,p:Player,delta:number,reason:string){
   ensure(Number.isSafeInteger(delta)&&Math.abs(delta)<10000000,'Invalid score change.');
-  s.events.push({id:ctx.actionId,playerId:p.id,delta,reason,round:s.roundIndex,at:ctx.now});
+  s.events.push({id:crypto.randomUUID(),playerId:p.id,delta,reason,round:s.roundIndex,at:ctx.now});
 }
 function checkpoint(s:GameState){
   const snapshot=structuredClone(s);delete snapshot.undo;
@@ -56,6 +56,7 @@ function addBanked(s:GameState,p:Player,value:number,ctx:Context,reason:string){
 function resetPuzzle(s:GameState){
   s.revealed=[];s.usedLetters=[];s.respondent=undefined;s.attempted=[];
   s.pendingSpin=undefined;s.speedupCanSolve=false;s.mysteryCash=undefined;s.spin=undefined;s.undo=undefined;
+  s.answerStartedAt=undefined;
 }
 function nextPlayer(s:GameState){
   const players=activePlayers(s);
@@ -78,7 +79,7 @@ function setRound(s:GameState,ctx:Context){
   const round=currentRound(s)!;
   if(round.kind==='tossup'||round.kind==='triple'){
     s.phase='tossup';s.windowId=crypto.randomUUID();s.deadline=ctx.now+TOSSUP_MS;
-    s.remaining=TOSSUP_MS;
+    s.remaining=TOSSUP_MS;s.puzzleStartedAt=ctx.now;
   }else{
     s.phase='turn';s.currentPlayerId=players.some(p=>p.id===s.roundStarterId)
       ? s.roundStarterId : players[random(ctx,players.length)].id;
@@ -88,7 +89,7 @@ function advanceTossup(s:GameState,ctx:Context){
   const round=currentRound(s);
   if(round&&s.puzzleIndex+1<round.puzzles.length){
     const oldDeadline=s.deadline;
-    s.puzzleIndex++;resetPuzzle(s);
+    s.puzzleIndex++;resetPuzzle(s);s.puzzleStartedAt=ctx.now;
     s.phase='tossup';s.windowId=crypto.randomUUID();
     const frenzy=s.roundIndex===0&&s.definition.opening==='frenzy';
     s.deadline=frenzy&&oldDeadline&&oldDeadline>ctx.now?oldDeadline:ctx.now+TOSSUP_MS;
@@ -114,7 +115,11 @@ function completedTossup(s:GameState,ctx:Context,player:Player){
       s.tripleWinners.every(id=>id===player.id))
       addBanked(s,player,4000,ctx,'Triple Toss-Up sweep bonus');
   }
-  advanceTossup(s,ctx);
+  if(round?.kind==='triple'){
+    s.revealed=[...new Set(currentPuzzle(s).answer.toUpperCase().match(/[A-Z]/g)??[])];
+    s.lastAction=player.name+' solved a $2,000 Toss-Up!';
+    finishRound(s);
+  }else advanceTossup(s,ctx);
 }
 function bankrupt(s:GameState,p:Player){
   p.roundMoney=0;p.pendingPrizes=[];p.millionWedge=false;
@@ -172,7 +177,23 @@ function expire(s:GameState,ctx:Context){
   else if(s.phase==='tieTossup'){
     s.windowId=crypto.randomUUID();s.deadline=ctx.now+TOSSUP_MS;
     s.remaining=TOSSUP_MS;s.attempted=[];s.revealed=[];
-  }else if(s.phase==='tossup')advanceTossup(s,ctx);
+  }else if(s.phase==='tossup'){
+    if(s.roundIndex===0&&s.definition.opening==='frenzy')finishRound(s);
+    else advanceTossup(s,ctx);
+  }
+}
+function revealAutomatically(s:GameState,now:number){
+  if(!['tossup','tieTossup'].includes(s.phase)||s.puzzleStartedAt===undefined)return;
+  const puzzle=currentPuzzle(s);
+  const letters=[...new Set(puzzle.answer.toUpperCase().match(/[A-Z]/g)??[])];
+  const hash=(letter:string)=>{
+    let value=2166136261;
+    for(const char of puzzle.id+letter){value^=char.charCodeAt(0);value=Math.imul(value,16777619);}
+    return value>>>0;
+  };
+  letters.sort((a,b)=>hash(a)-hash(b)||a.localeCompare(b));
+  const target=Math.min(letters.length,Math.max(0,Math.floor((now-s.puzzleStartedAt)/2300)));
+  for(const letter of letters.slice(0,target))if(!s.revealed.includes(letter))s.revealed.push(letter);
 }
 export function reconcile(s:GameState,now:number){
   if(FINISHED.has(s.phase)||s.paused)return;
@@ -181,10 +202,10 @@ export function reconcile(s:GameState,now:number){
     const expiry=s.deadline;
     const ctx:Context={userId:s.hostId,actionId:'timeout:'+s.version+':'+expiry,expectedVersion:s.actionVersion,now:expiry};
     expire(s,ctx);
-  }
+  }else revealAutomatically(s,at);
   if(now>=boundary){
     s.remaining=s.deadline===undefined?s.remaining:Math.max(0,s.deadline-boundary);
-    s.deadline=undefined;s.paused=true;s.pauseReason='Host disconnected';
+    s.deadline=undefined;s.paused=true;s.pausedAt=boundary;s.pauseReason='Host disconnected';
   }
 }
 function requireController(s:GameState,ctx:Context){
@@ -237,15 +258,19 @@ export function applyCommand(original:GameState,command:Command,ctx:Context):Gam
     case 'claim':
       ensure(!FINISHED.has(s.phase),'Game already ended.');
       if(s.deadline!==undefined)s.remaining=Math.max(0,s.deadline-ctx.now);
+      if(!s.paused)s.pausedAt=ctx.now;
       s.paused=true;s.pauseReason='Ready to resume';s.deadline=undefined;
       s.controller=command.controller;s.hostSeen=ctx.now;
       break;
     case 'pause':
       if(!s.paused){if(s.deadline!==undefined)s.remaining=Math.max(0,s.deadline-ctx.now);
-        s.deadline=undefined;s.paused=true;s.pauseReason='Paused by host';}
+        s.deadline=undefined;s.paused=true;s.pausedAt=ctx.now;s.pauseReason='Paused by host';}
       break;
     case 'continue':
       ensure(s.paused,'Game already running.');
+      if(s.pausedAt!==undefined&&s.puzzleStartedAt!==undefined)
+        s.puzzleStartedAt+=Math.max(0,ctx.now-s.pausedAt);
+      s.pausedAt=undefined;
       s.paused=false;s.pauseReason=undefined;s.hostSeen=ctx.now;
       if(['tossup','tieTossup','bonusTimer'].includes(s.phase))
         s.deadline=ctx.now+(s.remaining??TOSSUP_MS);
@@ -276,7 +301,7 @@ export function applyCommand(original:GameState,command:Command,ctx:Context):Gam
       ensure(p,'Only contestants can buzz.',403);
       ensure(!s.attempted.includes(p.id),'You have already attempted this puzzle.',409);
       if(s.phase==='tieTossup')ensure(s.tieEligible?.includes(p.id),'Only tied leaders may buzz.',403);
-      s.remaining=s.deadline-ctx.now;s.deadline=undefined;s.respondent=p.id;
+      s.remaining=s.deadline-ctx.now;s.deadline=undefined;s.respondent=p.id;s.answerStartedAt=ctx.now;
       s.phase=s.phase==='tieTossup'?'tieAnswer':'tossupAnswer';
       s.lastAction=p.name+' buzzed first!';
       break;
@@ -286,6 +311,9 @@ export function applyCommand(original:GameState,command:Command,ctx:Context):Gam
       ensure(s.respondent,'No contestant is answering.');
       checkpoint(s);
       const p=activePlayers(s).find(p=>p.id===s.respondent)!;
+      if(!command.correct&&s.answerStartedAt!==undefined&&s.puzzleStartedAt!==undefined)
+        s.puzzleStartedAt+=Math.max(0,ctx.now-s.answerStartedAt);
+      s.answerStartedAt=undefined;
       if(command.correct){
         completedTossup(s,ctx,p);
       }else if(s.phase==='tieAnswer'){
@@ -310,7 +338,9 @@ export function applyCommand(original:GameState,command:Command,ctx:Context):Gam
     }
     case 'nextRound':{
       phase('roundResult');
-      if(s.roundIndex===s.definition.rounds.length-1){
+      if(currentRound(s)?.kind==='triple'&&s.puzzleIndex+1<currentRound(s)!.puzzles.length){
+        advanceTossup(s,ctx);
+      }else if(s.roundIndex===s.definition.rounds.length-1){
         const players=activePlayers(s),high=Math.max(...players.map(total)),leaders=players.filter(p=>total(p)===high);
         if(leaders.length>1){
           resetPuzzle(s);s.tieEligible=leaders.map(p=>p.id);s.phase='tieTossup';
