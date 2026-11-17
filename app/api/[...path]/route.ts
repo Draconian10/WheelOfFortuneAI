@@ -7,6 +7,7 @@ import { heartbeat, loadSession, mutate, readSession } from '@/lib/server/sessio
 import { newSession, GameError, viewSession, total } from '@/lib/game/engine';
 import { pinSchema, envelopeSchema, saveSchema, playable } from '@/lib/game/schema';
 import type { GameDefinition, GameState } from '@/lib/game/types';
+import {resultsCsv} from '@/lib/game/results-csv';
 
 export const runtime='nodejs';
 export const dynamic='force-dynamic';
@@ -18,28 +19,6 @@ async function body(req:NextRequest){
   try{return JSON.parse(text);}catch{throw new GameError('Invalid JSON.');}
 }
 const noCache={'Cache-Control':'private, no-store'};
-function csvCell(value:unknown){
-  const s=String(value??'');
-  // Prevent spreadsheet formula execution in exported data.
-  const safe=/^[=+\-@\t\r]/.test(s)?'\''+s:s;
-  return '"'+safe.replace(/"/g,'""')+'"';
-}
-function exportResults(s:GameState){
-  const rows:(string|number)[][]=[
-    ['Player','Standing','Banked cash','Prize value','Total','Status'],
-  ];
-  const ranked=s.players.filter(p=>!p.removed).sort((a,b)=>total(b)-total(a)||a.seat-b.seat);
-  for(const [i,p] of ranked.entries())
-    rows.push([p.name,i+1,p.banked,p.prizes.reduce((sum,x)=>sum+x.value,0),total(p),
-      p.id===s.bonusPlayerId?'Main-game finalist':'Contestant']);
-  rows.push([]);
-  rows.push(['Event','Player','Round','Amount','Description','Timestamp']);
-  for(const e of s.events){
-    const player=s.players.find(p=>p.id===e.playerId);
-    rows.push(['Score',player?.name??'',e.round+1,e.delta,e.reason,new Date(e.at).toISOString()]);
-  }
-  return '\ufeff'+rows.map(r=>r.map(csvCell).join(',')).join('\r\n')+'\r\n';
-}
 async function handle(req:NextRequest,ctx:{params:Promise<{path:string[]}>}){
   try{
     if(req.method!=='GET'){
@@ -244,7 +223,7 @@ async function handle(req:NextRequest,ctx:{params:Promise<{path:string[]}>}){
         hostOnly(user);const {state}=await readSession(id);
         if(state.hostId!==user.id)throw new GameError('Only the host can download results.',403);
         if(!['ended','finished'].includes(state.phase))throw new GameError('End the game to export results.',409);
-        return new Response(exportResults(state),{headers:{
+        return new Response(resultsCsv(state),{headers:{
           'Content-Type':'text/csv; charset=utf-8',
           'Content-Disposition':'attachment; filename="fortune-results-'+id+'.csv"',
           'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'

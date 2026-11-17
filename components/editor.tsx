@@ -7,6 +7,7 @@ import {HostAuth} from './auth';
 import {api} from '@/lib/client';
 import {gameSchema,playable} from '@/lib/game/schema';
 import {emptyGame,starterGame} from '@/lib/game/starter';
+import {gameToPortableJson,parsePortableGameJson,MAX_GAME_JSON_LENGTH} from '@/lib/game/portable-json';
 import type {GameDefinition,Puzzle} from '@/lib/game/types';
 export default function Editor({id}:{id:string}){
   return <HostAuth>{user=><GameEditor key={user.id+id} id={id} owner={user.id}/>}</HostAuth>;
@@ -151,7 +152,7 @@ function GameEditor({id,owner}:{id:string;owner:string}){
       <div className="round-tabs">
         {game.rounds.map((r,i)=><button key={r.id}
           className={'round-tab '+(!editingBonus&&!editingTie&&roundIndex===i?'active':'')}
-          onClick={()=>activateRound(i)}><span className="round-number">{i+1}</span>{r.title}</button>)}
+          onClick={()=>activateRound(i)}><span className="stage-number">STAGE {i+1}</span>{r.title}</button>)}
         <button className={'round-tab '+(editingBonus?'active':'')} onClick={()=>{
           setEditingBonus(true);setEditingTie(false);setPuzzleIndex(0);
         }}>✦ Bonus Round</button>
@@ -226,32 +227,33 @@ function GameEditor({id,owner}:{id:string;owner:string}){
     </div>
     <section className="panel json-panel">
       <div className="section-heading"><div><h2>Import or export game JSON</h2>
-        <p className="muted small">The JSON editor always starts with your current puzzles, rounds, and prize setup.</p></div>
+        <p className="muted small">The portable JSON contains your puzzles, rounds and prizes—no IDs are needed.</p></div>
         <button className="button secondary" onClick={()=>{
           if(!jsonOpen&&!jsonDirty){
-            setJsonText(JSON.stringify(game,null,2));
+            setJsonText(JSON.stringify(gameToPortableJson(game),null,2));
           }setJsonOpen(!jsonOpen);
         }}><FileJson size={16}/>{jsonOpen?'Close JSON':'Import JSON'}</button></div>
       {jsonOpen&&<div><div className="button-row">
         <button className="button secondary" onClick={()=>{
           if(jsonDirty&&!confirm('Replace unapplied JSON with the current game?'))return;
-          setJsonText(JSON.stringify(game,null,2));setJsonDirty(false);
+          setJsonText(JSON.stringify(gameToPortableJson(game),null,2));setJsonDirty(false);
         }}><RefreshCw size={15}/> Use current game JSON</button>
         <button className="button secondary" onClick={async()=>{
-          try{await navigator.clipboard.writeText(JSON.stringify(game,null,2));setStatus('JSON copied.');}
+          try{await navigator.clipboard.writeText(JSON.stringify(gameToPortableJson(game),null,2));setStatus('JSON copied.');}
           catch{setError('Unable to copy JSON.');}
         }}><Copy size={15}/> Copy JSON</button>
         <button className="button secondary" onClick={()=>{
           if(!confirm('Replace JSON text with the example game?'))return;
-          setJsonText(JSON.stringify(starterGame(),null,2));setJsonDirty(true);
+          setJsonText(JSON.stringify(gameToPortableJson(starterGame()),null,2));setJsonDirty(true);
         }}>Load example</button></div>
-        <textarea className="json-textarea" aria-label="Game JSON" spellCheck={false} rows={18}
+        <textarea className="json-textarea" aria-label="Game JSON" spellCheck={false} maxLength={MAX_GAME_JSON_LENGTH} rows={18}
           value={jsonText} onChange={e=>{setJsonText(e.target.value);setJsonDirty(true);}}/>
         <button className="button primary" onClick={()=>{
           try{
-            const parsed=gameSchema.parse(JSON.parse(jsonText));
+            const parsed=parsePortableGameJson(jsonText);
             if(!confirm('Replace the current editor game with this validated JSON?'))return;
-            update(parsed);setJsonDirty(false);setStatus('Imported game JSON — save to persist.');
+            update(parsed);setJsonText(JSON.stringify(gameToPortableJson(parsed),null,2));setJsonDirty(false);
+            setStatus('Imported JSON. Fresh IDs generated for every round and puzzle — save to persist.');
           }catch(e){setError((e as Error).message);}
         }}><Check size={16}/> Validate & apply JSON</button>
       </div>}

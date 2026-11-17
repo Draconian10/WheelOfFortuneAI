@@ -765,3 +765,48 @@ describe('three-second Final Spin solve window',()=>{
     expect(s.phase).toBe('roundResult');
   });
 });
+
+describe('Express automatically completes a fully revealed puzzle',()=>{
+  const express=()=>{
+    const s=regular();s.roundIndex=3;s.currentPlayerId=PLAYERS[0];
+    s.definition.rounds[3].puzzles[0].answer='CAT';
+    s.phase='express';s.revealed=['C','A'];s.usedLetters=['C','A'];s.deadline=undefined;
+    s.players[0].roundMoney=2200;s.hostSeen=START+100000;
+    return s;
+  };
+  it('ends Express and banks cash immediately after the final correct letter',()=>{
+    let s=express();
+    s=send(s,{type:'letter',letter:'T'},PLAYERS[0]);
+    expect(s.phase).toBe('roundResult');
+    expect(s.players[0].banked).toBe(3200);
+    expect(s.players[0].roundMoney).toBe(0);
+    expect(s.lastAction).toMatch(/entire Express puzzle/);
+    expect(viewSession(s,PLAYERS[1],s.updatedAt).puzzle.answer).toBe('CAT');
+    expect(s.history?.at(-1)?.action).toBe('letter');
+  });
+  it('does not complete Express when any answer letter remains concealed',()=>{
+    let s=express();s.revealed=['C'];s.usedLetters=['C'];
+    s=send(s,{type:'letter',letter:'A'},PLAYERS[0]);
+    expect(s.phase).toBe('express');
+    expect(s.players[0].banked).toBe(0);
+  });
+  it('does not accidentally auto-solve outside Express mode',()=>{
+    let s=express();s.phase='turn';
+    s=send(s,{type:'hostSolve',playerId:PLAYERS[0]});
+    expect(s.phase).toBe('roundResult');
+    // Ordinary gameplay is still resolved by explicit player/host solve.
+    expect(s.lastAction).not.toMatch(/entire Express puzzle/);
+  });
+});
+describe('session action journal is private and reflects the correct puzzle',()=>{
+  it('records player actions without storing authentication secrets in player views',()=>{
+    let s=starting();
+    s=send(s,{type:'buzz',windowId:s.windowId!},PLAYERS[0]);
+    s=send(s,{type:'judgeBuzz',correct:true});
+    expect(s.history?.some(v=>v.action==='buzz')).toBe(true);
+    expect(s.history?.some(v=>v.action==='judgeBuzz')).toBe(true);
+    const player=viewSession(s,PLAYERS[1],s.updatedAt);
+    expect('history' in player).toBe(false);
+    expect(s.events[0].puzzleIndex).toBe(0);
+  });
+});
