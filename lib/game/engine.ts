@@ -6,6 +6,8 @@ import { secureIndex, wheelForRound } from './wheel';
 export const HOST_GRACE_MS = 30000;
 export const TOSSUP_MS = 30000;
 export const SPIN_DURATION_MS = 4200;
+/** Show-style interval for a solve after a successful Speed-Up letter. */
+export const SPEEDUP_SOLVE_MS = 3000;
 /** Live sessions support one to five contestants; a full lobby is never required to begin. */
 export const MIN_PLAYERS = 1;
 export const MAX_PLAYERS = 5;
@@ -59,7 +61,8 @@ function addBanked(s:GameState,p:Player,value:number,ctx:Context,reason:string){
 }
 function resetPuzzle(s:GameState){
   s.revealed=[];s.usedLetters=[];s.respondent=undefined;s.attempted=[];
-  s.pendingSpin=undefined;s.speedupCanSolve=false;s.mysteryCash=undefined;s.spin=undefined;s.undo=undefined;
+  s.pendingSpin=undefined;s.speedupCanSolve=false;s.wildCardValue=undefined;
+  s.mysteryCash=undefined;s.spin=undefined;s.undo=undefined;
   s.answerStartedAt=undefined;s.spinEndsAt=undefined;s.puzzleTimedOut=undefined;s.frenzyRemaining=undefined;
 }
 function nextPlayer(s:GameState){
@@ -68,18 +71,19 @@ function nextPlayer(s:GameState){
   const index=players.findIndex(p=>p.id===s.currentPlayerId);
   s.currentPlayerId=players[(index+1)%players.length].id;
   s.phase=s.speedupValue!==undefined?'speedup':'turn';
-  s.pendingSpin=undefined;s.speedupCanSolve=false;
+  s.pendingSpin=undefined;s.speedupCanSolve=false;s.wildCardValue=undefined;
+  s.deadline=undefined;s.remaining=undefined;
 }
 function finishRound(s:GameState){
   s.phase='roundResult';s.deadline=undefined;s.remaining=undefined;s.spinEndsAt=undefined;
   s.respondent=undefined;s.windowId=undefined;s.pendingSpin=undefined;
-  s.speedupCanSolve=false;
+  s.speedupCanSolve=false;s.wildCardValue=undefined;
 }
 function setRound(s:GameState,ctx:Context){
   resetPuzzle(s);s.deadline=undefined;s.remaining=undefined;s.speedupValue=undefined;s.frenzyRemaining=undefined;
   const players=activePlayers(s);
   ensure(players.length>0,'No contestants remain.');
-  for(const p of players){p.roundMoney=0;p.pendingPrizes=[];}
+  for(const p of players){p.roundMoney=0;p.pendingPrizes=[];p.pendingMillionWedge=false;}
   const round=currentRound(s)!;
   if(round.kind==='tossup'||round.kind==='triple'){
     s.phase='tossup';s.windowId=crypto.randomUUID();s.deadline=ctx.now+TOSSUP_MS;
@@ -125,7 +129,8 @@ function completedTossup(s:GameState,ctx:Context,player:Player){
   finishRound(s);
 }
 function bankrupt(s:GameState,p:Player){
-  p.roundMoney=0;p.pendingPrizes=[];p.millionWedge=false;
+  p.roundMoney=0;p.pendingPrizes=[];
+  p.wildCard=false;p.pendingMillionWedge=false;p.millionWedge=false;
   s.mysteryCash=undefined;
   s.lastAction=p.name+' hit BANKRUPT';
   nextPlayer(s);
@@ -134,29 +139,32 @@ function bankPuzzle(s:GameState,ctx:Context,p:Player){
   const current=currentRound(s);
   addBanked(s,p,p.roundMoney,ctx,'Solved '+(current?.title??'round'));
   p.prizes.push(...p.pendingPrizes);
+  if(p.pendingMillionWedge)p.millionWedge=true;
   if(current?.kind==='prize'&&current.prize)p.prizes.push(structuredClone(current.prize));
   s.roundStarterId=p.id;
-  for(const other of activePlayers(s)){other.roundMoney=0;other.pendingPrizes=[];}
+  for(const other of activePlayers(s)){
+    other.roundMoney=0;other.pendingPrizes=[];other.pendingMillionWedge=false;
+  }
   s.revealed=[...new Set(currentPuzzle(s).answer.toUpperCase().match(/[A-Z]/g)??[])];
   s.lastAction=p.name+' solved the puzzle!';
   finishRound(s);
 }
-function startBonus(s:GameState){
-  const players=activePlayers(s), high=Math.max(...players.map(total));
-  const leaders=players.filter(p=>total(p)===high);
-  s.tieEligible=leaders.length>1?leaders.map(p=>p.id):undefined;
-  if(leaders.length>1){
-    resetPuzzle(s);s.phase='tieTossup';s.windowId=crypto.randomUUID();
-    s.deadline=Date.now()+TOSSUP_MS;
-  }else{
-    s.bonusPlayerId=leaders[0].id;s.phase='bonusCategory';
-  }
+function startTiebreaker(s:GameState,ctx:Context,leaders:Player[]){
+  resetPuzzle(s);s.tieEligible=leaders.map(p=>p.id);
+  s.phase='tieTossup';s.windowId=crypto.randomUUID();
+  s.puzzleStartedAt=ctx.now;
+  s.deadline=ctx.now+TOSSUP_MS;s.remaining=TOSSUP_MS;
+  s.lastAction='Sudden-death Toss-Up! A fresh 30-second puzzle begins.';
 }
 function availableBonusEnvelopes(s:GameState):Prize[]{
   const finalist=s.players.find(p=>p.id===s.bonusPlayerId);
-  return finalist?.millionWedge
-    ?[...s.definition.bonus.envelopes,{label:'$1,000,000',value:1000000}]
-    :s.definition.bonus.envelopes;
+  const envelopes=s.definition.bonus.envelopes;
+  if(!finalist?.millionWedge)return envelopes;
+  // Replace the top envelope, rather than increasing the Bonus Wheel slots.
+  const hundredThousand=envelopes.findIndex(p=>p.value===100000);
+  const top=hundredThousand>=0?hundredThousand:
+    envelopes.reduce((best,p,i)=>p.value>envelopes[best].value?i:best,0);
+  return envelopes.map((p,i)=>i===top?{label:'$1,000,000',value:1000000}:p);
 }
 function prepareBonus(s:GameState,index:number){
   s.bonusPuzzleIndex=index;
@@ -180,6 +188,10 @@ function expire(s:GameState,ctx:Context){
   else if(s.phase==='tieTossup'){
     s.windowId=crypto.randomUUID();s.deadline=ctx.now+TOSSUP_MS;
     s.remaining=TOSSUP_MS;s.attempted=[];s.revealed=[];
+    s.puzzleStartedAt=ctx.now;
+  }else if(s.phase==='speedup'&&s.speedupCanSolve){
+    s.lastAction='The three-second solve window expired. Next contestant.';
+    nextPlayer(s);
   }else if(s.phase==='tossup'){
     if(s.roundIndex===0&&s.definition.opening==='frenzy'){
       // Expiry never selects the next puzzle and never reveals its solution.
@@ -304,6 +316,8 @@ export function applyCommand(original:GameState,command:Command,ctx:Context):Gam
       s.paused=false;s.pauseReason=undefined;s.hostSeen=ctx.now;
       if(['tossup','tieTossup','bonusTimer'].includes(s.phase))
         s.deadline=ctx.now+(s.remaining??TOSSUP_MS);
+      if(s.phase==='speedup'&&s.speedupCanSolve)
+        s.deadline=ctx.now+(s.remaining??SPEEDUP_SOLVE_MS);
       break;
     case 'lockLobby': phase('lobby');s.locked=command.locked;break;
     case 'remove':{
@@ -343,7 +357,10 @@ export function applyCommand(original:GameState,command:Command,ctx:Context):Gam
         s.attempted.push(p.id);s.respondent=undefined;
         const available=s.tieEligible?.some(id=>!s.attempted.includes(id));
         s.phase='tieTossup';s.windowId=crypto.randomUUID();
-        if(!available){s.attempted=[];s.revealed=[];}
+        if(!available){
+          s.attempted=[];s.revealed=[];
+          s.puzzleStartedAt=ctx.now;s.remaining=TOSSUP_MS;
+        }
         s.deadline=ctx.now+(s.remaining??TOSSUP_MS);
       }else if(s.roundIndex===0&&s.definition.opening==='frenzy'){
         s.revealed=[...new Set(currentPuzzle(s).answer.toUpperCase().match(/[A-Z]/g)??[])];
@@ -375,8 +392,7 @@ export function applyCommand(original:GameState,command:Command,ctx:Context):Gam
       }else if(s.roundIndex===s.definition.rounds.length-1){
         const players=activePlayers(s),high=Math.max(...players.map(total)),leaders=players.filter(p=>total(p)===high);
         if(leaders.length>1){
-          resetPuzzle(s);s.tieEligible=leaders.map(p=>p.id);s.phase='tieTossup';
-          s.windowId=crypto.randomUUID();s.deadline=ctx.now+TOSSUP_MS;s.remaining=TOSSUP_MS;
+          startTiebreaker(s,ctx,leaders);
         }else{resetPuzzle(s);s.bonusPlayerId=leaders[0].id;s.phase='bonusSpin';}
       }else{
         s.roundIndex++;s.puzzleIndex=0;setRound(s,ctx);
@@ -385,6 +401,7 @@ export function applyCommand(original:GameState,command:Command,ctx:Context):Gam
     }
     case 'spin':{
       phase('turn');const p=mustBeActive(s,ctx);
+      s.wildCardValue=undefined;
       const choices=wheelForRound(currentRound(s)!.kind);
       const index=random(ctx,choices.length),wedge=choices[index];
       const spin:Spin={id:crypto.randomUUID(),index,wedge,playerId:p.id,sequence:(s.spin?.sequence??0)+1};
@@ -399,17 +416,28 @@ export function applyCommand(original:GameState,command:Command,ctx:Context):Gam
     }
     case 'buyVowel':{
       phase('turn');const p=mustBeActive(s,ctx);
+      s.wildCardValue=undefined;
       ensure(p.roundMoney>=250,'You need $250 in unbanked round money.');
       ensure('AEIOU'.split('').some(l=>!s.usedLetters.includes(l)),'All vowels have been used.');
       p.roundMoney-=250;s.pendingSpin=undefined;s.phase='letter';
       s.lastAction=p.name+' bought a vowel for $250.';
       break;
     }
+    case 'useWildCard':{
+      phase('turn');const p=mustBeActive(s,ctx);
+      ensure(p.wildCard&&s.wildCardValue!==undefined&&s.wildCardValue>0,
+        'Wild Card requires a preceding successful cash-wedge consonant.',409);
+      p.wildCard=false;s.phase='wildLetter';
+      s.lastAction=p.name+' spent a Wild Card for one extra consonant at $'+s.wildCardValue+' per occurrence.';
+      break;
+    }
     case 'letter':{
-      phase('letter','express','speedup');const p=mustBeActive(s,ctx);
+      phase('letter','wildLetter','express','speedup');const p=mustBeActive(s,ctx);
       const letter=command.letter.toUpperCase(),vowel=VOWELS.includes(letter);
+      const usingWild=s.phase==='wildLetter';
       const spin=s.pendingSpin;
-      const cash=spin?.wedge.value??0;
+      const cash=spin?.wedge.value??(usingWild?s.wildCardValue??0:0);
+      if(usingWild)ensure(!vowel,'Wild Card allows a consonant only.',409);
       if(s.phase==='letter'){
         ensure(spin?.wedge.kind==='free'||(spin? !vowel:vowel),
           spin?'Call a consonant for this wedge.':'Choose a vowel.');
@@ -428,9 +456,17 @@ export function applyCommand(original:GameState,command:Command,ctx:Context):Gam
         break;
       }
       s.revealed.push(letter);
+      if(usingWild){
+        const amount=cash*count;
+        p.roundMoney+=amount;s.wildCardValue=undefined;s.phase='turn';
+        s.lastAction=p.name+' earned $'+amount+' using the Wild Card extra consonant.';
+        break;
+      }
       if(s.phase==='speedup'){
         if(!vowel)p.roundMoney+=(s.speedupValue??0)*count;
-        s.speedupCanSolve=true;s.lastAction=letter+' appears '+count+' time(s). Solve or pass.';
+        s.speedupCanSolve=true;
+        s.deadline=ctx.now+SPEEDUP_SOLVE_MS;s.remaining=SPEEDUP_SOLVE_MS;
+        s.lastAction=letter+' appears '+count+' time(s). Three seconds to solve!';
         break;
       }
       if(!vowel){
@@ -440,7 +476,8 @@ export function applyCommand(original:GameState,command:Command,ctx:Context):Gam
       }else s.lastAction=letter+' revealed '+count+' time(s).';
       if(s.phase==='express')break;
       if(spin?.wedge.kind==='wild')p.wildCard=true;
-      if(spin?.wedge.kind==='million')p.millionWedge=true;
+      if(spin?.wedge.kind==='million')p.pendingMillionWedge=true;
+      s.wildCardValue=spin?.wedge.kind==='cash'&&!vowel&&p.wildCard?cash:undefined;
       if(spin?.wedge.kind==='mystery'){
         s.mysteryCash=cash*count;s.phase='mysteryChoice';break;
       }
@@ -469,9 +506,12 @@ export function applyCommand(original:GameState,command:Command,ctx:Context):Gam
     case 'solve':{
       phase('turn','express','speedup','letter');
       const p=mustBeActive(s,ctx);
-      if(s.phase==='speedup')ensure(s.speedupCanSolve,'Call a correct letter before solving.');
+      if(s.phase==='speedup'){
+        ensure(s.speedupCanSolve,'Call a correct letter before solving.');
+        ensure(s.deadline!==undefined&&ctx.now<s.deadline,'The solve window expired.',409);
+      }
       if(s.phase==='letter')ensure(s.pendingSpin?.wedge.kind==='free','Choose a letter first.');
-      checkpoint(s);
+      checkpoint(s);s.wildCardValue=undefined;
       if(normalize(command.text)===normalize(currentPuzzle(s).answer)){bankPuzzle(s,ctx,p);}
       else{
         s.lastAction=p.name+' attempted an incorrect solution.';
@@ -484,6 +524,8 @@ export function applyCommand(original:GameState,command:Command,ctx:Context):Gam
     }
     case 'hostSolve':{
       phase('turn','letter','express','speedup');
+      if(s.phase==='speedup')ensure(s.speedupCanSolve&&s.deadline!==undefined&&ctx.now<s.deadline,
+        'The current contestant has no open three-second solve window.',409);
       const p=activePlayers(s).find(p=>p.id===command.playerId);
       ensure(p&&p.id===s.currentPlayerId,'Only the active contestant may solve.');
       checkpoint(s);bankPuzzle(s,ctx,p);
@@ -491,14 +533,18 @@ export function applyCommand(original:GameState,command:Command,ctx:Context):Gam
     }
     case 'speedUp':{
       phase('turn');ensure(currentRound(s)?.kind==='final','Speed-Up belongs to Round 4.');
+      s.wildCardValue=undefined;
       const available=wheelForRound('final').filter(w=>w.kind==='cash');
       s.speedupValue=available[random(ctx,available.length)].value+1000;
       s.pendingSpin=undefined;s.phase='speedup';s.speedupCanSolve=false;
+      s.deadline=undefined;s.remaining=undefined;
       s.lastAction='Final Spin! Consonants are worth $'+s.speedupValue+' each.';
       break;
     }
     case 'pass':{
-      phase('speedup');mustBeActive(s,ctx);nextPlayer(s);break;
+      phase('speedup');mustBeActive(s,ctx);
+      ensure(s.speedupCanSolve,'Call a correct letter before passing.',409);
+      nextPlayer(s);break;
     }
     case 'chooseBonus':{
       phase('bonusCategory');
@@ -602,7 +648,8 @@ export function viewSession(s:GameState,userId:string,now:number,controller?:str
     attempted:s.attempted,revealed:s.revealed,usedLetters:s.usedLetters,
     spin:s.spin,pendingSpin:s.pendingSpin,lastAction:s.lastAction,puzzleTimedOut:s.puzzleTimedOut,
     deadline:s.deadline,remaining:s.remaining,spinEndsAt:s.spinEndsAt,frenzyRemaining:s.frenzyRemaining,speedupValue:s.speedupValue,
-    speedupCanSolve:s.speedupCanSolve,bonusPlayerId:s.bonusPlayerId,bonusPuzzleIndex:s.bonusPuzzleIndex,
+    speedupCanSolve:s.speedupCanSolve,wildCardValue:s.wildCardValue,
+    bonusPlayerId:s.bonusPlayerId,bonusPuzzleIndex:s.bonusPuzzleIndex,
     bonusCategories:extra?s.definition.bonus.puzzles.map(p=>p.category):undefined,
     bonusLetters:s.bonusLetters,
     bonusPrize:s.bonusEnvelopeIndex!==undefined&&['bonusResult','finished','ended'].includes(s.phase)

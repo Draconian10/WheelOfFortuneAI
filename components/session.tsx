@@ -45,7 +45,7 @@ function LiveSession({id,role,displayToken}:{
   const [sound,setSound]=useState(false);
   const [settledSpinId,setSettledSpinId]=useState('');
   const spinPendingVisual=!!s?.spin?.startedAt&&
-    ['spinning','turn','letter','mysteryChoice','expressChoice','express','speedup'].includes(s.phase)&&
+    ['spinning','turn','letter','wildLetter','mysteryChoice','expressChoice','express','speedup'].includes(s.phase)&&
     s.spin.id!==settledSpinId;
   const me=s?.players.find(p=>p.id===userId),active=s?.players.find(p=>p.id===s.currentPlayerId);
   const respondent=s?.players.find(p=>p.id===s.respondent);
@@ -82,11 +82,11 @@ function LiveSession({id,role,displayToken}:{
   },[s?.phase,sound]);
   const doSend=(command:Command)=>{void send(command);};
   const isTossup=!!s&&['tossup','tossupAnswer','tieTossup','tieAnswer'].includes(s.phase);
-  const isWheel=!!s&&['spinning','turn','letter','mysteryChoice','expressChoice','express','speedup'].includes(s.phase);
+  const isWheel=!!s&&['spinning','turn','letter','wildLetter','mysteryChoice','expressChoice','express','speedup'].includes(s.phase);
   const isBonus=!!s&&['bonusCategory','bonusSpin','bonusLetters','bonusTimer','bonusResult'].includes(s.phase);
   const canSolve=!!s&&['turn','express','speedup','letter'].includes(s.phase)&&canAct&&
     (s.phase!=='letter'||s.pendingSpin?.wedge.kind==='free')&&
-    (s.phase!=='speedup'||s.speedupCanSolve);
+    (s.phase!=='speedup'||(s.speedupCanSolve&&remaining>0));
   const wheelKind=s&&['regular','mystery','prize','final'].includes(s.roundKind)
     ?s.roundKind as 'regular'|'mystery'|'prize'|'final':'regular';
   const selectedConsonants=s?.bonusLetters.filter(l=>!VOWELS.includes(l)).length??0;
@@ -282,6 +282,10 @@ function LiveSession({id,role,displayToken}:{
                   <RotateCcw size={18}/> Spin the Wheel</button>
                 <button className="button secondary full" disabled={!canAct||(active?.roundMoney??0)<250}
                   onClick={()=>doSend({type:'buyVowel'})}><Coins size={18}/> Buy Vowel · $250</button>
+                {active?.wildCard&&s.wildCardValue!==undefined&&<button className="button secondary full"
+                  disabled={!canAct} onClick={()=>doSend({type:'useWildCard'})}>
+                  <Star size={18}/> Use Wild Card · Extra consonant at {money(s.wildCardValue)} each
+                </button>}
                 {solveButton}
                 {control&&s.roundKind==='final'&&<button className="button secondary full"
                   onClick={()=>doSend({type:'speedUp'})}><Timer size={16}/> Start Final Spin</button>}
@@ -291,6 +295,11 @@ function LiveSession({id,role,displayToken}:{
                   s.pendingSpin?'Call a consonant for '+s.pendingSpin.wedge.label:'Choose a vowel'}</h3>
                 {choices(s.pendingSpin?.wedge.kind==='free'?undefined:!s.pendingSpin)}
                 {solveButton}
+              </>}
+              {s.phase==='wildLetter'&&<>
+                <h3>Wild Card · One extra consonant at {money(s.wildCardValue??0)} each</h3>
+                <p className="muted">The Wild Card has been spent. An incorrect consonant loses the turn.</p>
+                {choices(false)}
               </>}
               {s.phase==='mysteryChoice'&&<>
                 <h3>Mystery Wedge!</h3><p className="muted">Keep $1,000 per matching consonant, or take a 50/50 chance on $10,000 or Bankrupt.</p>
@@ -308,15 +317,26 @@ function LiveSession({id,role,displayToken}:{
               </>}
               {s.phase==='speedup'&&<>
                 <h3>Final Spin · One letter at a time</h3>
-                {!s.speedupCanSolve?choices(undefined):<p className="muted">Correct letter! Solve now or pass to the next contestant.</p>}
+                {!s.speedupCanSolve?choices(undefined):<>
+                  <div className="speedup-solve-clock" role="status" aria-live="off">
+                    <span>Three seconds to solve</span>{clock}
+                  </div>
+                  <p className="muted">Solve now or let the turn pass automatically when the clock expires.</p>
+                </>}
                 {solveButton}
-                {s.speedupCanSolve&&<button className="button secondary full" disabled={!canAct}
+                {s.speedupCanSolve&&<button className="button secondary full"
+                  disabled={!canAct||remaining<=0}
                   onClick={()=>doSend({type:'pass'})}>Pass turn <ArrowRight size={16}/></button>}
               </>}
               {solutionForm}
-              {control&&['turn','letter','express','speedup'].includes(s.phase)&&<div className="host-oral">
+              {control&&['turn','letter','express','speedup'].includes(s.phase)&&
+                (s.phase!=='speedup'||(s.speedupCanSolve&&remaining>0))&&
+                <div className="host-oral">
                 <button className="text-button" onClick={()=>{
-                  if(active&&confirm('Confirm '+active.name+' solved the puzzle correctly aloud?'))
+                  // A confirmation popup consumes the entire three-second
+                  // Speed-Up interval; the host must be able to award a spoken
+                  // solution immediately while the contestant's window is open.
+                  if(active&&(s.phase==='speedup'||confirm('Confirm '+active.name+' solved the puzzle correctly aloud?')))
                     doSend({type:'hostSolve',playerId:active.id});
                 }}>Mark spoken solution correct</button>
               </div>}

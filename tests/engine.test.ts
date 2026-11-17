@@ -1,7 +1,7 @@
 import {describe,it,expect} from 'vitest';
 import {starterGame,emptyGame} from '@/lib/game/starter';
 import {playable,gameSchema,commandSchema} from '@/lib/game/schema';
-import {newSession,applyCommand,viewSession,reconcile,total,MIN_PLAYERS,MAX_PLAYERS,activePlayers,SPIN_DURATION_MS,TOSSUP_MS} from '@/lib/game/engine';
+import {newSession,applyCommand,viewSession,reconcile,total,MIN_PLAYERS,MAX_PLAYERS,activePlayers,SPIN_DURATION_MS,TOSSUP_MS,SPEEDUP_SOLVE_MS} from '@/lib/game/engine';
 import type {GameState,Context} from '@/lib/game/types';
 import type {Command} from '@/lib/game/schema';
 const HOST='00000000-0000-4000-8000-000000000001';
@@ -507,5 +507,261 @@ describe('Toss-Up automatic reveal pacing (30-second broadcast window)',()=>{
     const audience=viewSession(s,HOST,start+TOSSUP_MS,undefined,true);
     expect(audience.puzzle.answer).toBeUndefined();
     expect(audience.puzzle.tiles).toContain('');
+  });
+});
+
+describe('Million Dollar Wedge qualification',()=>{
+  const collect=()=>{
+    let s=regular();s.roundIndex=2;s.currentPlayerId=PLAYERS[0];
+    s=spinAndSettle(s,PLAYERS[0],16); // $500 Million wedge (Mystery round)
+    expect(s.pendingSpin?.wedge.kind).toBe('million');
+    s=send(s,{type:'letter',letter:'G'},PLAYERS[0]);
+    return s;
+  };
+  it('requires collecting contestant to solve the same puzzle before eligibility',()=>{
+    let s=collect();
+    expect(s.players[0].pendingMillionWedge).toBe(true);
+    expect(s.players[0].millionWedge).toBe(false);
+    s=send(s,{type:'solve',text:'WRONG ANSWER'},PLAYERS[0]);
+    expect(s.currentPlayerId).toBe(PLAYERS[1]);
+    s=send(s,{type:'hostSolve',playerId:PLAYERS[1]});
+    expect(s.players[0].pendingMillionWedge).toBe(false);
+    expect(s.players[0].millionWedge).toBe(false);
+    expect(s.players[1].millionWedge).toBe(false);
+    expect(s.phase).toBe('roundResult');
+  });
+  it('keeps the qualification after a correct round solve, then forfeits it on later BANKRUPT',()=>{
+    let s=collect();
+    s=send(s,{type:'hostSolve',playerId:PLAYERS[0]});
+    expect(s.players[0].pendingMillionWedge).toBe(false);
+    expect(s.players[0].millionWedge).toBe(true);
+    const secured=s.players[0].banked;
+    s=send(s,{type:'nextRound'});
+    expect(s.phase).toBe('turn');
+    expect(s.currentPlayerId).toBe(PLAYERS[0]);
+    s=spinAndSettle(s,PLAYERS[0],8);
+    expect(s.players[0].banked).toBe(secured);
+    expect(s.players[0].millionWedge).toBe(false);
+  });
+  it('replaces the top bonus envelope only when the winning finalist qualified',()=>{
+    let s=collect();
+    s=send(s,{type:'hostSolve',playerId:PLAYERS[0]});
+    s.phase='bonusSpin';s.bonusPlayerId=PLAYERS[0];
+    s=send(s,{type:'spinBonus'},PLAYERS[0],4);
+    expect(s.bonusEnvelopeIndex).toBe(4);
+    s=send(s,{type:'chooseBonus',index:0},PLAYERS[0]);
+    for(const letter of ['B','C','D','A'])s=send(s,{type:'bonusLetter',letter},PLAYERS[0]);
+    s=send(s,{type:'startBonus'});
+    s=send(s,{type:'bonusJudge',correct:true});
+    expect(s.players[0].prizes.at(-1)?.value).toBe(1000000);
+    expect(s.players[0].prizes.at(-1)?.label).toBe('$1,000,000');
+
+    let unqualified=collect();
+    unqualified=send(unqualified,{type:'solve',text:'INCORRECT'},PLAYERS[0]);
+    unqualified=send(unqualified,{type:'hostSolve',playerId:PLAYERS[1]});
+    unqualified.phase='bonusSpin';unqualified.bonusPlayerId=PLAYERS[0];
+    unqualified=send(unqualified,{type:'spinBonus'},PLAYERS[0],4);
+    unqualified=send(unqualified,{type:'chooseBonus',index:0},PLAYERS[0]);
+    for(const letter of ['B','C','D','A'])unqualified=send(unqualified,{type:'bonusLetter',letter},PLAYERS[0]);
+    unqualified=send(unqualified,{type:'startBonus'});
+    unqualified=send(unqualified,{type:'bonusJudge',correct:true});
+    expect(unqualified.players[0].prizes.at(-1)?.value).toBe(100000);
+  });
+  it('forfeits a provisional Million Dollar collectible on BANKRUPT',()=>{
+    let s=collect();
+    expect(s.players[0].pendingMillionWedge).toBe(true);
+    s=spinAndSettle(s,PLAYERS[0],8);
+    expect(s.players[0].pendingMillionWedge).toBe(false);
+    expect(s.players[0].millionWedge).toBe(false);
+  });
+});
+
+describe('Wild Card retention, in-round extra consonant, and forfeiture',()=>{
+  const collectWild=()=>{
+    let s=regular();
+    s=spinAndSettle(s,PLAYERS[0],16); // Wild Card, $500 per T
+    expect(s.pendingSpin?.wedge.kind).toBe('wild');
+    s=send(s,{type:'letter',letter:'T'},PLAYERS[0]);
+    expect(s.players[0].wildCard).toBe(true);
+    return s;
+  };
+  it('spends the retained Wild Card on an extra paid consonant after a cash wedge',()=>{
+    let s=collectWild();
+    expect(()=>send(s,{type:'useWildCard'},PLAYERS[0])).toThrow('cash-wedge consonant');
+    s=spinAndSettle(s,PLAYERS[0],0); // $500
+    s=send(s,{type:'letter',letter:'H'},PLAYERS[0]);
+    expect(s.wildCardValue).toBe(500);
+    const before=s.players[0].roundMoney;
+    s=send(s,{type:'useWildCard'},PLAYERS[0]);
+    expect(s.phase).toBe('wildLetter');
+    expect(s.players[0].wildCard).toBe(false);
+    expect(()=>send(s,{type:'letter',letter:'A'},PLAYERS[0])).toThrow('consonant only');
+    s=send(s,{type:'letter',letter:'R'},PLAYERS[0]);
+    expect(s.phase).toBe('turn');
+    expect(s.players[0].roundMoney).toBe(before+1000); // R twice at $500
+    expect(s.wildCardValue).toBeUndefined();
+    expect(()=>send(s,{type:'useWildCard'},PLAYERS[0])).toThrow();
+  });
+  it('consumes Wild Card and passes the turn for a wrong extra consonant',()=>{
+    let s=collectWild();
+    s=spinAndSettle(s,PLAYERS[0],0);
+    s=send(s,{type:'letter',letter:'H'},PLAYERS[0]);
+    s=send(s,{type:'useWildCard'},PLAYERS[0]);
+    s=send(s,{type:'letter',letter:'Z'},PLAYERS[0]);
+    expect(s.currentPlayerId).toBe(PLAYERS[1]);
+    expect(s.players[0].wildCard).toBe(false);
+    expect(s.wildCardValue).toBeUndefined();
+  });
+  it('retains Wild Card when another player solves, but BANKRUPT forfeits it',()=>{
+    let s=collectWild();
+    s=send(s,{type:'solve',text:'NOPE'},PLAYERS[0]);
+    s=send(s,{type:'hostSolve',playerId:PLAYERS[1]});
+    expect(s.players[0].wildCard).toBe(true);
+    s=send(s,{type:'nextRound'});
+    s.currentPlayerId=PLAYERS[0]; // control returned to this player during the next round
+    s=spinAndSettle(s,PLAYERS[0],8);
+    expect(s.players[0].wildCard).toBe(false);
+  });
+  it('permits an extra Bonus Round consonant when the Wild Card survived',()=>{
+    let s=collectWild();
+    s.phase='bonusSpin';s.bonusPlayerId=PLAYERS[0];
+    s=send(s,{type:'spinBonus'},PLAYERS[0],0);
+    s=send(s,{type:'chooseBonus',index:0},PLAYERS[0]);
+    for(const letter of ['B','C','D','G','A'])s=send(s,{type:'bonusLetter',letter},PLAYERS[0]);
+    expect(s.bonusLetters).toHaveLength(5);
+    s=send(s,{type:'startBonus'});
+    expect(s.phase).toBe('bonusTimer');
+  });
+  it('forgoes the temporary extra consonant option when spinning again',()=>{
+    let s=collectWild();
+    s=spinAndSettle(s,PLAYERS[0],0);
+    s=send(s,{type:'letter',letter:'H'},PLAYERS[0]);
+    expect(s.wildCardValue).toBe(500);
+    s=send(s,{type:'spin'},PLAYERS[0],0);
+    expect(s.wildCardValue).toBeUndefined();
+    expect(s.players[0].wildCard).toBe(true); // saved for later/Bonus
+  });
+});
+
+describe('tiebreaker uses its own reveal epoch',()=>{
+  function tied(){
+    const s=regular();s.roundIndex=5;s.phase='roundResult';
+    s.puzzleStartedAt=START-90000;s.revealed=['A','B','C'];
+    s.hostSeen=START+100000;
+    return s;
+  }
+  it('starts an empty tie puzzle with a fresh 30-second countdown',()=>{
+    let s=tied();s=send(s,{type:'nextRound'});
+    expect(s.phase).toBe('tieTossup');
+    expect(s.tieEligible).toHaveLength(3);
+    expect(s.revealed).toEqual([]);
+    expect(s.puzzleStartedAt).toBe(s.updatedAt);
+    expect(s.deadline!-s.puzzleStartedAt!).toBe(TOSSUP_MS);
+    const time=s.puzzleStartedAt!;
+    reconcile(s,time+4000);
+    const distinct=new Set(s.definition.tiebreaker.answer.match(/[A-Z]/g)).size;
+    expect(s.revealed.length).toBeLessThan(distinct-1);
+    expect(viewSession(s,PLAYERS[0],time+4000).puzzle.answer).toBeUndefined();
+  });
+  it('resets reveal start after an unanswered tiebreaker expires',()=>{
+    let s=tied();s=send(s,{type:'nextRound'});
+    const old=s.deadline!,oldWindow=s.windowId;
+    reconcile(s,old);
+    expect(s.phase).toBe('tieTossup');
+    expect(s.puzzleStartedAt).toBe(old);
+    expect(s.revealed).toEqual([]);
+    expect(s.windowId).not.toBe(oldWindow);
+    expect(s.deadline).toBe(old+TOSSUP_MS);
+  });
+  it('restarts cleanly if every tied leader is judged wrong',()=>{
+    let s=tied();s=send(s,{type:'nextRound'});
+    const firstStart=s.puzzleStartedAt!;
+    for(const p of PLAYERS){
+      s=send(s,{type:'buzz',windowId:s.windowId!},p);
+      s=send(s,{type:'judgeBuzz',correct:false});
+    }
+    expect(s.phase).toBe('tieTossup');
+    expect(s.attempted).toEqual([]);
+    expect(s.revealed).toEqual([]);
+    expect(s.puzzleStartedAt).toBe(s.updatedAt);
+    expect(s.puzzleStartedAt).toBeGreaterThan(firstStart);
+    expect(s.deadline!-s.puzzleStartedAt!).toBe(TOSSUP_MS);
+  });
+});
+
+describe('three-second Final Spin solve window',()=>{
+  function speedup(){
+    let s=regular();s.roundIndex=5;s.hostSeen=START+100000;
+    s=send(s,{type:'speedUp'},HOST,0);
+    expect(s.phase).toBe('speedup');
+    return s;
+  }
+  it('starts a three-second window after a correct consonant, with no instant cash bank',()=>{
+    let s=speedup();
+    expect(()=>send(s,{type:'hostSolve',playerId:PLAYERS[0]})).toThrow('open three-second');
+    s=send(s,{type:'letter',letter:'C'},PLAYERS[0]);
+    expect(s.speedupCanSolve).toBe(true);
+    expect(s.deadline!-s.updatedAt).toBe(SPEEDUP_SOLVE_MS);
+    expect(s.players[0].roundMoney).toBeGreaterThan(0);
+    expect(s.players[0].banked).toBe(0);
+    const at=s.deadline!;
+    reconcile(s,at-1);
+    expect(s.currentPlayerId).toBe(PLAYERS[0]);
+    reconcile(s,at);
+    expect(s.currentPlayerId).toBe(PLAYERS[1]);
+    expect(s.phase).toBe('speedup');
+    expect(s.speedupCanSolve).toBe(false);
+    expect(s.deadline).toBeUndefined();
+    expect(s.players[0].roundMoney).toBeGreaterThan(0);
+    expect(()=>send(s,{type:'solve',text:'CHOCOLATE CHIP PANCAKES'},PLAYERS[0],0,at+10)).toThrow();
+  });
+  it('banks a correct complete solution within the timed window',()=>{
+    let s=speedup();
+    s=send(s,{type:'letter',letter:'C'},PLAYERS[0]);
+    const money=s.players[0].roundMoney;
+    s=send(s,{type:'solve',text:'CHOCOLATE CHIP PANCAKES'},PLAYERS[0],0,s.updatedAt+1000);
+    expect(s.phase).toBe('roundResult');
+    expect(s.players[0].banked).toBe(money);
+  });
+  it('gives a free vowel a solve window but no letter earnings',()=>{
+    let s=speedup();
+    s=send(s,{type:'letter',letter:'A'},PLAYERS[0]);
+    expect(s.speedupCanSolve).toBe(true);
+    expect(s.players[0].roundMoney).toBe(0);
+    expect(s.deadline!-s.updatedAt).toBe(SPEEDUP_SOLVE_MS);
+  });
+  it('passes immediately after a wrong consonant or manual pass',()=>{
+    let s=speedup();
+    expect(()=>send(s,{type:'pass'},PLAYERS[0])).toThrow('correct letter');
+    s=send(s,{type:'letter',letter:'Z'},PLAYERS[0]);
+    expect(s.currentPlayerId).toBe(PLAYERS[1]);
+    s=send(s,{type:'letter',letter:'C'},PLAYERS[1]);
+    s=send(s,{type:'pass'},PLAYERS[1]);
+    expect(s.currentPlayerId).toBe(PLAYERS[2]);
+    expect(s.deadline).toBeUndefined();
+  });
+  it('preserves the remaining solve window during host pause and resume',()=>{
+    let s=speedup();
+    s=send(s,{type:'letter',letter:'C'},PLAYERS[0]);
+    const opening=s.deadline!;
+    s=send(s,{type:'pause'},HOST,0,opening-2000);
+    expect(s.paused).toBe(true);
+    expect(s.remaining).toBe(2000);
+    s=send(s,{type:'continue'},HOST,0,opening+58000);
+    expect(s.paused).toBe(false);
+    expect(s.deadline!-s.updatedAt).toBe(2000);
+    const ends=s.deadline!;
+    reconcile(s,ends);
+    expect(s.currentPlayerId).toBe(PLAYERS[1]);
+    expect(s.speedupCanSolve).toBe(false);
+  });
+  it('denies late host adjudication; only an active contestant with time left can win',()=>{
+    let s=speedup();
+    s=send(s,{type:'letter',letter:'C'},PLAYERS[0]);
+    const expiry=s.deadline!;
+    expect(()=>send(s,{type:'hostSolve',playerId:PLAYERS[0]},HOST,0,expiry)).toThrow();
+    // A valid host oral judgment just before expiry is still allowed.
+    s=send(s,{type:'hostSolve',playerId:PLAYERS[0]},HOST,0,expiry-1);
+    expect(s.phase).toBe('roundResult');
   });
 });
