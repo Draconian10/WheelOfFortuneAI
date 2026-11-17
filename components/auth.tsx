@@ -1,6 +1,7 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
 import type { User } from '@supabase/supabase-js';
+import { LogOut, UserRound } from 'lucide-react';
 import { configured, supabase } from '@/lib/client';
 import { hostConfirmationRedirect, hostPasswordRecoveryRedirect } from '@/lib/auth-flow';
 
@@ -96,13 +97,15 @@ export function HostAuth({ children }: { children: (user: User) => React.ReactNo
   if (user && !user.is_anonymous && mode !== 'reset')
     return (
       <>
-        <div className="account-row">
-          <span>{user.email}</span>
+        <div className="account-row" aria-label="Signed-in host account">
+          <span className="account-email"><UserRound size={16} aria-hidden="true" />
+            <span title={user.email}>{user.email}</span>
+          </span>
           <button
-            className="text-button"
+            className="text-button account-signout"
             onClick={() => void supabase().auth.signOut({ scope: 'local' })}
           >
-            Sign out
+            <LogOut size={16} aria-hidden="true" /> Sign out
           </button>
         </div>
         {children(user)}

@@ -69,27 +69,24 @@ export default function KeepAwake() {
     };
   }, []);
   if (supported === undefined) return null;
-  if (!supported)
-    return (
-      <p className="awake-status" role="status">
-        Screen awake unavailable. Extend your device’s screen timeout.
-      </p>
-    );
+  // Do not crowd the session toolbar with an unsupported feature notice.
+  if (!supported) return null;
   const messages = {
-    off: 'Off',
-    requesting: 'Requesting…',
-    active: 'Active',
-    waiting: 'Waiting for this screen to be visible',
-    released: 'Released by device — tap to retry',
-    denied: 'Unavailable — tap to retry or extend screen timeout',
+    off: 'Keep the host screen awake',
+    requesting: 'Requesting screen wake lock…',
+    active: 'Screen will stay awake',
+    waiting: 'Screen wake lock is waiting for the tab',
+    released: 'Screen wake lock was released — tap to retry',
+    denied: 'Screen wake lock unavailable — tap to retry',
   };
+  const enabledStatus = status === 'active' || status === 'requesting' || status === 'waiting';
   return (
     <div className="awake-control">
       <button
         type="button"
-        className="button secondary small-button"
-        aria-pressed={status === 'active'}
-
+        className="button secondary small-button awake-button"
+        aria-pressed={enabledStatus}
+        title={messages[status]}
         onClick={() => {
           if (status === 'active' || status === 'waiting' || status === 'requesting') {
             enabled.current = false;
@@ -104,12 +101,12 @@ export default function KeepAwake() {
           }
         }}
       >
-        <Sun size={17} />
-        Keep screen awake
+        <Sun size={17} aria-hidden="true" />
+        <span>Keep screen awake</span>
+        {status !== 'off' && <span className={'awake-state '+(status === 'active' ? 'is-active' : '')} role="status">
+          {status === 'active' ? 'On' : status === 'requesting' ? '…' : status === 'waiting' ? 'Paused' : 'Retry'}
+        </span>}
       </button>
-      <span className="awake-status" role="status">
-        {messages[status]}
-      </span>
     </div>
   );
 }
