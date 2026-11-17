@@ -252,7 +252,11 @@ async function handle(req:NextRequest,ctx:{params:Promise<{path:string[]}>}){
       }
       if(req.method==='GET'&&!op){
         const {state,runtimeAt}=await loadSession(id,user.id);
-        return NextResponse.json({...viewSession(state,user.id,Date.now(),controller),runtimeAt},{headers:noCache});
+        return NextResponse.json({
+          ...viewSession(state,user.id,Date.now(),controller,
+            req.nextUrl.searchParams.get('view')==='audience'),
+          runtimeAt
+        },{headers:noCache});
       }
       if(req.method==='POST'&&op==='end'){
         hostOnly(user);
