@@ -59,6 +59,8 @@ export interface GameState {
   pauseReason?: string;
   locked: boolean;
   phase: Phase;
+  /** True when the host ended a room before starting the show. */
+  closedInLobby?: boolean;
   roundIndex: number;
   puzzleIndex: number;
   players: Player[];
@@ -106,6 +108,7 @@ export interface Context {
 export interface SessionView {
   id: string; gameId: string; title: string; joinCode: string;
   phase: Phase; version: number; actionVersion: number;
+  closedInLobby?: boolean;
   roundIndex: number; totalRounds: number; roundTitle: string; roundKind: RoundKind | 'bonus' | 'tie';
   puzzleIndex: number; puzzlesInRound: number;
   puzzle: { category: string; tiles: string[]; answer?: string; hint?: string };
