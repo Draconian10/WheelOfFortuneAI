@@ -206,7 +206,7 @@ function LiveSession({id,role,displayToken}:{
           </div>):<div className="empty-players"><span className="empty-players-icon"><Users size={36} aria-hidden="true"/></span>
             <strong>No contestants yet</strong>
             <p>The first player will appear here after joining with the six-digit code.</p>
-          </div>
+          </div>}
           <div className="waiting-bar" role="progressbar" aria-label="Contestant seats filled"
             aria-valuenow={s.players.length} aria-valuemin={0} aria-valuemax={MAX_PLAYERS}>
             <span style={{width:(s.players.length/MAX_PLAYERS*100)+'%'}}/></div>
