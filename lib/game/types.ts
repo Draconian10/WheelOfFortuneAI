@@ -44,7 +44,22 @@ export interface ScoreEvent {
   delta: number;
   reason: string;
   round: number;
+  /** Zero-based puzzle index at the moment points were awarded. */
+  puzzleIndex?: number;
   at: number;
+}
+/** Internal host-export-only audit trail, not included in audience/player views. */
+export interface GameHistoryEntry {
+  at: number;
+  actorId?: string;
+  subjectId?: string;
+  action: string;
+  stageIndex: number;
+  puzzleIndex: number;
+  phase: Phase;
+  detail: string;
+  /** Letter or typed response when supplied; never stores host PINs. */
+  input?: string;
 }
 export interface GameState {
   id: string;
@@ -100,6 +115,8 @@ export interface GameState {
   tripleWinners: string[];
   tieEligible?: string[];
   events: ScoreEvent[];
+  /** Optional for compatibility with sessions created before activity reporting. */
+  history?: GameHistoryEntry[];
   processed: string[];
   // A checkpoint also restores the event ledger; no reversal may cross a completed puzzle.
   undo?: Omit<GameState,'undo'>;

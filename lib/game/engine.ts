@@ -45,12 +45,19 @@ export function newSession(definition:GameDefinition,gameId:string,hostId:string
     id:crypto.randomUUID(),gameId,hostId,joinCode,title:definition.title,definition:structuredClone(definition),
     version:0,actionVersion:0,hostSeen:now,controller,paused:false,locked:false,phase:'lobby',
     roundIndex:0,puzzleIndex:0,players:[],attempted:[],revealed:[],usedLetters:[],bonusLetters:[],
-    tripleWinners:[],events:[],processed:[],createdAt:now,updatedAt:now
+    tripleWinners:[],events:[],history:[],processed:[],createdAt:now,updatedAt:now
   };
 }
 function mark(s:GameState,ctx:Context,p:Player,delta:number,reason:string){
   ensure(Number.isSafeInteger(delta)&&Math.abs(delta)<10000000,'Invalid score change.');
-  s.events.push({id:crypto.randomUUID(),playerId:p.id,delta,reason,round:s.roundIndex,at:ctx.now});
+  s.events.push({id:crypto.randomUUID(),playerId:p.id,delta,reason,
+    round:s.roundIndex,puzzleIndex:s.puzzleIndex,at:ctx.now});
+}
+function recordAction(s:GameState,at:number,action:string,detail:string,actorId?:string,subjectId?:string,input?:string){
+  if(!s.history)s.history=[];
+  s.history.push({at,action,detail,actorId,subjectId,stageIndex:s.roundIndex,
+    puzzleIndex:s.puzzleIndex,phase:s.phase,...(input===undefined?{}:{input})});
+  if(s.history.length>1200)s.history=s.history.slice(-1000);
 }
 function checkpoint(s:GameState){
   const snapshot=structuredClone(s);delete snapshot.undo;
@@ -204,6 +211,7 @@ function expire(s:GameState,ctx:Context){
 function settleSpin(s:GameState){
   if(s.phase!=='spinning'||!s.spin||s.spinEndsAt===undefined)return;
   const spin=s.spin,p=activePlayers(s).find(p=>p.id===spin.playerId);
+  const resolvedAt=s.spinEndsAt;
   s.spinEndsAt=undefined;
   if(!p){s.phase='turn';s.pendingSpin=undefined;return;}
   s.pendingSpin=spin;
@@ -215,6 +223,7 @@ function settleSpin(s:GameState){
     s.phase='letter';
     s.lastAction=p.name+' landed on '+spin.wedge.label+'.';
   }
+  recordAction(s,resolvedAt,'wheelResult',s.lastAction??'Wheel resolved.',undefined,p.id,spin.wedge.label);
 }
 function revealAutomatically(s:GameState,now:number){
   if(!['tossup','tieTossup'].includes(s.phase)||s.puzzleStartedAt===undefined)return;
@@ -474,7 +483,17 @@ export function applyCommand(original:GameState,command:Command,ctx:Context):Gam
         p.roundMoney+=amount;
         s.lastAction=p.name+' earned $'+amount+' with '+letter+'.';
       }else s.lastAction=letter+' revealed '+count+' time(s).';
-      if(s.phase==='express')break;
+      if(s.phase==='express'){
+        // A player who reveals every distinct letter during Express has already
+        // completed the puzzle; don't force a redundant typed solution.
+        const answerLetters=[...new Set(currentPuzzle(s).answer.toUpperCase().match(/[A-Z]/g)??[])];
+        if(answerLetters.every(c=>s.revealed.includes(c))){
+          checkpoint(s);
+          bankPuzzle(s,ctx,p);
+          s.lastAction=p.name+' revealed the entire Express puzzle and won the round automatically!';
+        }
+        break;
+      }
       if(spin?.wedge.kind==='wild')p.wildCard=true;
       if(spin?.wedge.kind==='million')p.pendingMillionWedge=true;
       s.wildCardValue=spin?.wedge.kind==='cash'&&!vowel&&p.wildCard?cash:undefined;
@@ -619,6 +638,19 @@ export function applyCommand(original:GameState,command:Command,ctx:Context):Gam
       s.phase='ended';s.locked=true;s.paused=false;s.deadline=undefined;s.windowId=undefined;break;
   }
   if(command.type!=='heartbeat'){
+    const subject=original.respondent??original.currentPlayerId;
+    const input=command.type==='letter'||command.type==='bonusLetter'?command.letter:
+      command.type==='solve'||command.type==='bonusSolve'?command.text:
+      command.type==='judgeBuzz'||command.type==='bonusJudge'?command.correct?'Correct':'Incorrect':undefined;
+    const description=s.lastAction!==original.lastAction?s.lastAction??command.type:
+      command.type==='nextRound'?'Advanced to '+(currentRound(s)?.title??s.phase)+'.':
+      command.type==='start'?'Started the game.':
+      command.type==='pause'?'Show paused.':
+      command.type==='continue'?'Show resumed.':
+      command.type==='join'?'A contestant joined.':
+      command.type==='finish'?'Announced the champion.':
+      command.type;
+    recordAction(s,ctx.now,command.type,description,ctx.userId,subject,input);
     s.processed.push(ctx.actionId);
     if(s.processed.length>600)s.processed=s.processed.slice(-400);
     s.actionVersion=original.actionVersion+1;
