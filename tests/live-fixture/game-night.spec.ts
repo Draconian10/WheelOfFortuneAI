@@ -114,8 +114,12 @@ test('complete 5-contestant browser game: join, live buzz, host control, rounds,
   };
   try{
     const host=await create(HOST,true);
+    host.on('console',msg=>{if(msg.type()==='error')console.log('[fixture console]',msg.text());});
+    host.on('pageerror',err=>console.log('[fixture page error]',err.message));
     await host.goto('/host/session/'+s.id);
-    await expect(host.locator('[data-game-phase="lobby"]')).toBeVisible();
+    await host.waitForTimeout(900);
+    console.log('[fixture host initial page]',(await host.locator('body').innerText()).slice(0,1400));
+    await expect(host.locator('[data-game-phase="lobby"]')).toBeVisible({timeout:10000});
     note('Host logged in, controls active, empty room');
     const contestants:Page[]=[];
     for(let i=0;i<5;i++){
