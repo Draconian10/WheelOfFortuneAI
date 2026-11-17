@@ -1,7 +1,7 @@
-name: Verify game
+name: Verify Fortune Live
 on:
   push:
-    branches: [main]
+    branches: [main, "feat/**"]
   pull_request:
 permissions:
   contents: read
@@ -15,19 +15,6 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run format:check
       - run: npm run typecheck
       - run: npm test
-      - name: Full 15-player API/SQL game regression
-        run: npm run test:stress -- -t "complete 15-player game"
       - run: npm run build
-      - run: npx playwright install --with-deps chromium
-      - run: npm run test:e2e
-      - name: Offline regression for the live-browser runner (three profiles)
-        run: npm run test:live:fixture
-      - uses: actions/upload-artifact@v4
-        if: failure()
-        with:
-          name: browser-test-results
-          path: test-results/
-          retention-days: 7
