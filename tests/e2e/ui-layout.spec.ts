@@ -176,7 +176,7 @@ test('host PIN reclaim is compact and show controls have separate readable actio
   await expect(controls).toHaveCount(2);
   const pause=await controls.nth(0).boundingBox(),end=await controls.nth(1).boundingBox();
   expect(pause).not.toBeNull();expect(end).not.toBeNull();
-  expect(end!.top??end!.y).toBeGreaterThan(pause!.y+pause!.height);
+  expect(end!.y).toBeGreaterThan(pause!.y+pause!.height);
   await fits(page);
 });
 test('winner text remains stationary while confetti overlay is present or removed',async({page})=>{
