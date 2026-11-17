@@ -35,7 +35,7 @@ export interface Player {
   removed: boolean;
   lastSeen: number;
 }
-export interface Spin { id: string; index: number; wedge: Wedge; playerId: string; sequence: number; }
+export interface Spin { id: string; index: number; wedge: Wedge; playerId: string; sequence: number; startedAt?: number; }
 export interface ScoreEvent {
   id: string;
   playerId: string;
@@ -76,6 +76,10 @@ export interface GameState {
   mysteryCash?: number;
   lastAction?: string;
   deadline?: number;
+  /** Wait until the broadcast wheel has completed before resolving the wedge. */
+  spinEndsAt?: number;
+  /** Time still available across the host-paced Fortune Frenzy puzzle sequence. */
+  frenzyRemaining?: number;
   puzzleStartedAt?: number;
   answerStartedAt?: number;
   pausedAt?: number;
@@ -115,7 +119,7 @@ export interface SessionView {
   players: Player[];
   currentPlayerId?: string; respondent?: string; windowId?: string; attempted: string[];
   revealed: string[]; usedLetters: string[]; spin?: Spin; pendingSpin?: Spin;
-  lastAction?: string; deadline?: number; remaining?: number;
+  lastAction?: string; deadline?: number; remaining?: number; spinEndsAt?: number; frenzyRemaining?: number;
   speedupValue?: number; speedupCanSolve?: boolean;
   bonusPlayerId?: string; bonusPuzzleIndex?: number;
   bonusCategories?: string[]; bonusLetters: string[]; bonusPrize?: Prize; bonusWon?: boolean;
