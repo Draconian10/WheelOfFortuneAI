@@ -213,3 +213,13 @@ describe('judgment corrections',()=>{
     expect(s.roundIndex).toBe(0);expect(s.puzzleIndex).toBe(1);
   });
 });
+
+describe('special wedge coverage',()=>{
+  it('includes the Lose a Turn wedge and preserves the contestant round bank',()=>{
+    let s=regular();s.players[0].roundMoney=1700;
+    s=send(s,{type:'spin'},PLAYERS[0],9);
+    expect(s.spin?.wedge.kind).toBe('lose');
+    expect(s.currentPlayerId).toBe(PLAYERS[1]);
+    expect(s.players[0].roundMoney).toBe(1700);
+  });
+});

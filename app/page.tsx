@@ -24,7 +24,7 @@ export default function Home(){
           <span><RadioTower size={17}/> Real-time buzzers</span>
           <span><Trophy size={17}/> Animated standings</span></div>
       </div>
-      <div className="hero-wheel"><div className="hero-wheel-halo"/><Wheel kind="regular"/>
+      <div className="hero-wheel"><div className="hero-wheel-halo"/><Wheel kind="tossup"/>
         <div className="hero-wheel-caption">SPIN THE WHEEL. CHASE YOUR FORTUNE.</div></div>
     </section>
   </main>;

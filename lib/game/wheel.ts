@@ -30,6 +30,10 @@ const segments: Wedge[] = [
 export const baseWheel = segments as readonly Wedge[];
 export function wheelForRound(kind: RoundKind): Wedge[] {
   const wheel = segments.map(x => ({...x}));
+  // The reference artwork remains unmodified for the landing page; live wheel rounds
+  // substitute a silver wedge with the traditional Lose a Turn outcome.
+  if(['regular','mystery','prize','final'].includes(kind))
+    wheel[9]={...wheel[9],kind:'lose',label:'LOSE A TURN',value:0};
   if(kind === 'regular'){
     wheel[7] = { ...wheel[7], kind:'free', label:'FREE PLAY',value:0 };
     wheel[16] = { ...wheel[16], kind:'wild', label:'WILD CARD',value:500 };
