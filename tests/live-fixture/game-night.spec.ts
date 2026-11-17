@@ -140,6 +140,7 @@ test('complete 5-contestant browser game: join, live buzz, host control, rounds,
     note('Audience link opens its own read-only tab');
     await host.getByRole('button',{name:/Start the Show/}).click();
     await expect(host.locator('[data-game-phase="tossup"]')).toBeVisible();
+    await expect(host.getByRole('button',{name:'Reveal next letter'})).toHaveCount(0);
     await contestants[0].reload();
     await expect(contestants[0].locator('[data-game-phase="tossup"]')).toBeVisible();
     await contestants[0].locator('button.buzzer.ready').click();

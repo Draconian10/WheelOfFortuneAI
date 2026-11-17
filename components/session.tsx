@@ -249,11 +249,9 @@ function LiveSession({id,role,displayToken}:{
                     if(navigator.vibrate)navigator.vibrate(35);
                     if(s.windowId)doSend({type:'buzz',windowId:s.windowId});
                   }}><Zap size={46} fill="currentColor"/><strong>{canBuzz?'BUZZ!':'WAIT'}</strong></button>}
-                {control&&<button className="button primary" disabled={busy||s.paused}
-                  onClick={()=>doSend({type:'revealLetter'})}><EyeIcon/> Reveal next letter</button>}
                 <p className="muted">{player?(s.attempted.includes(userId)?'You have already attempted this puzzle.':
                   canBuzz?'Tap to claim your chance to solve.':'Waiting for the host or another contestant.'):
-                  'Reveal letters one at a time. Buzzers close after the first accepted press.'}</p>
+                  'Letters appear automatically. Buzzers close after the first accepted press.'}</p>
               </>:
               <>
                 <h2>{respondent?.name} buzzed in first!</h2>
@@ -435,4 +433,3 @@ function LiveSession({id,role,displayToken}:{
     {player&&me&&!ended&&<RecoveryCode sessionId={id}/>}
   </main>;
 }
-function EyeIcon(){return <span aria-hidden="true">◫</span>;}

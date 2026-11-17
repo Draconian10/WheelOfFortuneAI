@@ -1,7 +1,7 @@
 import {describe,it,expect} from 'vitest';
 import {starterGame,emptyGame} from '@/lib/game/starter';
-import {playable,gameSchema} from '@/lib/game/schema';
-import {newSession,applyCommand,viewSession,reconcile,total,MIN_PLAYERS,MAX_PLAYERS,activePlayers,SPIN_DURATION_MS} from '@/lib/game/engine';
+import {playable,gameSchema,commandSchema} from '@/lib/game/schema';
+import {newSession,applyCommand,viewSession,reconcile,total,MIN_PLAYERS,MAX_PLAYERS,activePlayers,SPIN_DURATION_MS,TOSSUP_MS} from '@/lib/game/engine';
 import type {GameState,Context} from '@/lib/game/types';
 import type {Command} from '@/lib/game/schema';
 const HOST='00000000-0000-4000-8000-000000000001';
@@ -427,5 +427,85 @@ describe('audience data privacy during Frenzy timeout',()=>{
   it('refuses manual reveals before the timer actually expires',()=>{
     const s=starting();
     expect(()=>send(s,{type:'revealTimedOut'})).toThrow();
+  });
+});
+
+describe('Toss-Up automatic reveal pacing (30-second broadcast window)',()=>{
+  function freshShortPuzzle(answer='A BRIGHT IDEA'){
+    const s=starting();
+    s.definition.rounds[0].puzzles[0].answer=answer;
+    s.hostSeen=s.puzzleStartedAt!+TOSSUP_MS+90000;
+    return s;
+  }
+  it('disallows the removed manual reveal action at the API schema boundary',()=>{
+    expect(commandSchema.safeParse({type:'revealLetter'}).success).toBe(false);
+    expect(commandSchema.safeParse({type:'revealTimedOut'}).success).toBe(true);
+  });
+  it('keeps at least one distinct letter hidden on a short phrase at 23 and 29 seconds',()=>{
+    const s=freshShortPuzzle();
+    const start=s.puzzleStartedAt!;
+    const unique=new Set(s.definition.rounds[0].puzzles[0].answer.match(/[A-Z]/g));
+    expect(unique.size).toBe(9);
+    reconcile(s,start+23000);
+    // Previous fixed 2.3s interval showed all nine letters by ~20.7s.
+    expect(s.revealed.length).toBeLessThan(unique.size);
+    expect(s.revealed.length).toBe(6);
+    const player=viewSession(s,PLAYERS[0],start+23000);
+    expect(player.puzzle.answer).toBeUndefined();
+    expect(player.puzzle.tiles).toContain('');
+    expect(player.puzzle.tiles.join('')).not.toBe('ABRIGHTIDEA');
+    reconcile(s,start+TOSSUP_MS-1);
+    expect(s.phase).toBe('tossup');
+    expect(s.revealed.length).toBe(unique.size-1);
+    expect(viewSession(s,PLAYERS[0],start+TOSSUP_MS-1).puzzle.tiles).toContain('');
+  });
+  it('reveals short and long puzzles proportionally; never shows the final letter automatically',()=>{
+    for(const answer of ['AAAA','ABA','A BRIGHT IDEA','ABCDEFGHIJKLMNOPQRSTUVWXY']){
+      const s=freshShortPuzzle(answer);
+      const startedAt=s.puzzleStartedAt!;
+      const count=new Set(answer.match(/[A-Z]/g)).size;
+      for(const time of [0,1000,5000,14000,22000,29000,29999]){
+        reconcile(s,startedAt+time);
+        const expected=Math.min(Math.max(0,count-1),Math.floor(time*count/TOSSUP_MS));
+        expect(s.revealed.length).toBe(expected);
+        expect(s.revealed.length).toBeLessThan(count);
+      }
+    }
+  });
+  it('freezes the revealed tiles at the moment a contestant buzzes',()=>{
+    let s=freshShortPuzzle();
+    const start=s.puzzleStartedAt!;
+    s=send(s,{type:'buzz',windowId:s.windowId!},PLAYERS[0],0,start+23000);
+    expect(s.phase).toBe('tossupAnswer');
+    const frozen=s.revealed.slice();
+    expect(frozen.length).toBeLessThan(9);
+    reconcile(s,start+TOSSUP_MS+5000);
+    expect(s.phase).toBe('tossupAnswer');
+    expect(s.revealed).toEqual(frozen);
+    expect(viewSession(s,PLAYERS[1],start+TOSSUP_MS+5000).puzzle.tiles).toContain('');
+  });
+  it('keeps reveal pacing stable when the host pauses and resumes',()=>{
+    let s=freshShortPuzzle();
+    const start=s.puzzleStartedAt!;
+    s=send(s,{type:'pause'},HOST,0,start+15000);
+    const paused=s.revealed.slice();
+    reconcile(s,start+70000);
+    expect(s.revealed).toEqual(paused);
+    s=send(s,{type:'continue'},HOST,0,start+75000);
+    // Pausing for 60 seconds cannot accelerate the reveal rate.
+    expect(s.puzzleStartedAt).toBe(start+60000);
+    reconcile(s,start+78000);
+    expect(s.revealed.length).toBeLessThan(9);
+    expect(s.revealed.length).toBe(5);
+  });
+  it('does not auto-expose the final answer when the Frenzy timer runs out',()=>{
+    const s=freshShortPuzzle();
+    const start=s.puzzleStartedAt!;
+    reconcile(s,start+TOSSUP_MS);
+    expect(s.phase).toBe('roundResult');
+    expect(s.puzzleTimedOut).toBe(true);
+    const audience=viewSession(s,HOST,start+TOSSUP_MS,undefined,true);
+    expect(audience.puzzle.answer).toBeUndefined();
+    expect(audience.puzzle.tiles).toContain('');
   });
 });
