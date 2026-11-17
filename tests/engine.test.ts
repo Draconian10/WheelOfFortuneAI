@@ -116,10 +116,10 @@ describe('wheel scoring',()=>{
 });
 describe('bonus round and host control',()=>{
   it('uses RSTLNE plus 3 consonants and one vowel, awards the prize after a solve',()=>{
-    let s=regular();s.phase='bonusCategory';s.bonusPlayerId=PLAYERS[0];
-    s=send(s,{type:'chooseBonus',index:0},PLAYERS[0],0);
-    expect(s.phase).toBe('bonusSpin');
+    let s=regular();s.phase='bonusSpin';s.bonusPlayerId=PLAYERS[0];
     s=send(s,{type:'spinBonus'},PLAYERS[0],0);
+    expect(s.phase).toBe('bonusCategory');
+    s=send(s,{type:'chooseBonus',index:0},PLAYERS[0],0);
     for(const letter of ['B','C','D','A'])s=send(s,{type:'bonusLetter',letter},PLAYERS[0]);
     s=send(s,{type:'startBonus'});
     expect(s.phase).toBe('bonusTimer');

@@ -303,7 +303,8 @@ function LiveSession({id,role,displayToken}:{
           {s.phase==='bonusCategory'&&<section className="panel bonus-stage">
             <div className="bonus-star">✦</div><div className="eyebrow">THE GRAND FINALE</div>
             <h2>{finalist?.name}, pick your category!</h2>
-            <p className="muted">One category. One sealed prize envelope. One shot at a ten-second solve.</p>
+            <p className="muted">The bonus envelope is sealed. Choose a category for the ten-second puzzle.</p>
+            {s.spin&&<div className="bonus-wheel"><Wheel kind="regular" spin={s.spin} compact/></div>}
             <div className="bonus-categories">{s.bonusCategories?.map((name,i)=>
               <button key={i} className="bonus-category" disabled={!canAct&&userId!==s.bonusPlayerId||s.paused||busy}
                 onClick={()=>doSend({type:'chooseBonus',index:i})}>

@@ -98,7 +98,7 @@ function advanceTossup(s:GameState,ctx:Context){
 function completedTossup(s:GameState,ctx:Context,player:Player){
   const round=currentRound(s);
   if(s.phase==='tieAnswer'){
-    s.bonusPlayerId=player.id;s.tieEligible=undefined;s.phase='bonusCategory';
+    s.bonusPlayerId=player.id;s.tieEligible=undefined;s.phase='bonusSpin';s.spin=undefined;
     s.deadline=undefined;s.windowId=undefined;s.respondent=undefined;
     return;
   }
@@ -152,9 +152,8 @@ function availableBonusEnvelopes(s:GameState):Prize[]{
 }
 function prepareBonus(s:GameState,index:number){
   s.bonusPuzzleIndex=index;
-  s.bonusEnvelopeIndex=undefined;
-  s.bonusLetters=[];s.revealed=[];s.usedLetters=[];
-  s.phase='bonusSpin';s.lastAction='Category chosen. Spin the bonus wheel to pick a sealed prize.';
+  s.bonusLetters=[];s.revealed=BASE_BONUS.split('');s.usedLetters=BASE_BONUS.split('');
+  s.phase='bonusLetters';s.lastAction='Category chosen. R, S, T, L, N, E are revealed.';
 }
 function awardBonus(s:GameState,ctx:Context,correct:boolean){
   if(s.bonusWon!==undefined)return;
@@ -316,7 +315,7 @@ export function applyCommand(original:GameState,command:Command,ctx:Context):Gam
         if(leaders.length>1){
           resetPuzzle(s);s.tieEligible=leaders.map(p=>p.id);s.phase='tieTossup';
           s.windowId=crypto.randomUUID();s.deadline=ctx.now+TOSSUP_MS;s.remaining=TOSSUP_MS;
-        }else{s.bonusPlayerId=leaders[0].id;s.phase='bonusCategory';}
+        }else{resetPuzzle(s);s.bonusPlayerId=leaders[0].id;s.phase='bonusSpin';}
       }else{
         s.roundIndex++;s.puzzleIndex=0;setRound(s,ctx);
       }
@@ -449,8 +448,8 @@ export function applyCommand(original:GameState,command:Command,ctx:Context):Gam
       const wheel=wheelForRound('regular');
       s.spin={id:crypto.randomUUID(),index,wedge:{...wheel[index],label:'BONUS'},playerId:s.bonusPlayerId!,sequence:(s.spin?.sequence??0)+1};
       s.bonusEnvelopeIndex=random(ctx,availableBonusEnvelopes(s).length);
-      s.revealed=BASE_BONUS.split('');s.usedLetters=BASE_BONUS.split('');
-      s.phase='bonusLetters';s.lastAction='The bonus prize envelope is sealed. Choose your letters.';
+      s.revealed=[];s.usedLetters=[];
+      s.phase='bonusCategory';s.lastAction='The bonus envelope is sealed. Choose one of three puzzle categories.';
       break;
     }
     case 'bonusLetter':{
@@ -531,8 +530,8 @@ export function viewSession(s:GameState,userId:string,now:number,controller?:str
     speedupCanSolve:s.speedupCanSolve,bonusPlayerId:s.bonusPlayerId,bonusPuzzleIndex:s.bonusPuzzleIndex,
     bonusCategories:extra?s.definition.bonus.puzzles.map(p=>p.category):undefined,
     bonusLetters:s.bonusLetters,
-    bonusPrize:host||['bonusResult','finished'].includes(s.phase)
-      ?availableBonusEnvelopes(s)[s.bonusEnvelopeIndex??0]:undefined,
+    bonusPrize:s.bonusEnvelopeIndex!==undefined&&(host||['bonusResult','finished'].includes(s.phase))
+      ?availableBonusEnvelopes(s)[s.bonusEnvelopeIndex]:undefined,
     bonusWon:s.bonusWon,tripleWinners:s.tripleWinners,tieEligible:s.tieEligible,
     events:s.events,paused:s.paused,pauseReason:s.pauseReason,locked:s.locked,
     controllerOwned:host&&controller===s.controller,hostConnected:now-s.hostSeen<HOST_GRACE_MS,

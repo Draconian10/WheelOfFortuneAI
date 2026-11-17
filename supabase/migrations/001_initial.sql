@@ -193,6 +193,7 @@ begin
   select 1 from public.sessions s where s.id=p_id and s.version=p_expected
   and s.state->>'phase' in ('tossup','tieTossup')
   and s.state->>'windowId'=p_window::text
+   and (s.state->>'deadline')::bigint > floor(extract(epoch from clock_timestamp())*1000)::bigint
   and s.state->>'respondent' is null and not (s.state->>'paused')::boolean
   and (s.state->'attempted' is null or not (s.state->'attempted' ? p_user::text))
   and (s.state->>'phase'<>'tieTossup' or s.state->'tieEligible' ? p_user::text)
