@@ -51,6 +51,7 @@ export const commandSchema=z.discriminatedUnion('type',[
   z.object({type:z.literal('judgeBuzz'),correct:z.boolean()}).strict(),
   z.object({type:z.literal('spin')}).strict(),
   z.object({type:z.literal('buyVowel')}).strict(),
+  z.object({type:z.literal('useWildCard')}).strict(),
   z.object({type:z.literal('letter'),letter:z.string().regex(/^[A-Za-z]$/)}).strict(),
   z.object({type:z.literal('solve'),text:text(180).min(1)}).strict(),
   z.object({type:z.literal('hostSolve'),playerId:z.string().uuid()}).strict(),

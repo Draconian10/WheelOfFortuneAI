@@ -32,6 +32,8 @@ export interface Player {
   pendingPrizes: Prize[];
   wildCard: boolean;
   millionWedge: boolean;
+  /** Collected this round; active only if the holder solves that puzzle. */
+  pendingMillionWedge?: boolean;
   removed: boolean;
   lastSeen: number;
 }
@@ -88,6 +90,8 @@ export interface GameState {
   remaining?: number;
   speedupValue?: number;
   speedupCanSolve?: boolean;
+  /** Cash-per-consonant available for the Wild Card's extra guess. */
+  wildCardValue?: number;
   bonusPlayerId?: string;
   bonusPuzzleIndex?: number;
   bonusEnvelopeIndex?: number;
@@ -123,7 +127,7 @@ export interface SessionView {
   revealed: string[]; usedLetters: string[]; spin?: Spin; pendingSpin?: Spin;
   lastAction?: string; deadline?: number; remaining?: number; spinEndsAt?: number; frenzyRemaining?: number;
   puzzleTimedOut?: boolean;
-  speedupValue?: number; speedupCanSolve?: boolean;
+  speedupValue?: number; speedupCanSolve?: boolean; wildCardValue?: number;
   bonusPlayerId?: string; bonusPuzzleIndex?: number;
   bonusCategories?: string[]; bonusLetters: string[]; bonusPrize?: Prize; bonusWon?: boolean;
   tripleWinners: string[]; tieEligible?: string[];
