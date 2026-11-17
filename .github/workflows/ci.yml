@@ -8,6 +8,7 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -17,9 +18,25 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
+      - name: Complete-show and SQL concurrency stress regression
+        run: npm run test:stress
+        timeout-minutes: 7
       - run: npm run build
       - run: npx playwright install --with-deps chromium
-      - run: npm run test:e2e
+      - name: Responsive desktop/mobile UI regression
+        run: npm run test:e2e
+        timeout-minutes: 6
+      - name: Five-profile complete live-browser simulation (offline backend)
+        run: npm run test:live:fixture
+        timeout-minutes: 6
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: game-night-stress-report
+          path: |
+            test-results/stress/
+          if-no-files-found: warn
+          retention-days: 14
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

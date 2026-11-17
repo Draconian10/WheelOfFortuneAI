@@ -12,7 +12,9 @@
     "test:e2e": "playwright test",
     "check": "npm run typecheck && npm test && npm run build",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "test:stress": "vitest run --config vitest.stress.config.ts",
+    "test:live:fixture": "playwright test --config playwright.live-fixture.config.ts"
   },
   "keywords": [],
   "author": "",
