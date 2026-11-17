@@ -77,7 +77,8 @@ describe('live buzzer arbitration and privacy',()=>{
     expect(s.phase).toBe('roundResult');
     expect(s.puzzleIndex).toBe(0);
     expect(s.definition.rounds[0].puzzles[0].answer).toBe(firstPuzzle);
-    expect(s.frenzyRemaining).toBeGreaterThan(0);
+    expect(s.deadline).toBeUndefined();
+    expect(s.frenzyRemaining).toBeUndefined();
     s=send(s,{type:'nextRound'});
     expect(s.phase).toBe('tossup');expect(s.puzzleIndex).toBe(1);
   });
@@ -168,10 +169,18 @@ describe('automatic Toss-Up reveal and standings',()=>{
     expect(s.revealed.length).toBeGreaterThan(0);
     expect(s.phase).toBe('tossup');
   });
-  it('ends Fortune Frenzy when its shared 30-second timer expires',()=>{
-    const s=starting();s.hostSeen=s.deadline!+10000;
+  it('holds a timed-out Frenzy puzzle for host review without disclosing its solution',()=>{
+    let s=starting();s.hostSeen=s.deadline!+10000;
     reconcile(s,s.deadline!+1);
     expect(s.phase).toBe('roundResult');
+    expect(s.puzzleIndex).toBe(0);
+    expect(s.puzzleTimedOut).toBe(true);
+    expect(viewSession(s,PLAYERS[0],START).puzzle.answer).toBeUndefined();
+    expect(viewSession(s,HOST,START,undefined,true).puzzle.answer).toBeUndefined();
+    expect(()=>send(s,{type:'revealTimedOut'},PLAYERS[0])).toThrow('Only the host');
+    s=send(s,{type:'revealTimedOut'});
+    expect(s.puzzleTimedOut).toBe(false);
+    expect(viewSession(s,PLAYERS[0],START).puzzle.answer).toBe(s.definition.rounds[0].puzzles[0].answer);
     expect(s.puzzleIndex).toBe(0);
   });
   it('holds Triple Toss-Up standings between its three puzzles',()=>{
@@ -351,27 +360,72 @@ describe('server-authoritative wheel animation and Frenzy progression',()=>{
     s=send(s,{type:'letter',letter:'T'},PLAYERS[0]);
     expect(s.players[0].roundMoney).toBe(1500);
   });
-  it('preserves the remaining Frenzy clock through the host standings pause',()=>{
+  it('starts the second Frenzy puzzle with a fresh 30-second clock after a correct solve',()=>{
     let s=starting();
     s=send(s,{type:'buzz',windowId:s.windowId!},PLAYERS[0]);
-    const carry=s.remaining!;
+    const firstRemaining=s.remaining!;
+    expect(firstRemaining).toBeGreaterThan(0);
     s=send(s,{type:'judgeBuzz',correct:true});
     expect(s.phase).toBe('roundResult');
     expect(s.puzzleIndex).toBe(0);
     expect(s.players[0].banked).toBe(1000);
-    expect(s.frenzyRemaining).toBe(carry);
     expect(s.deadline).toBeUndefined();
-    s=send(s,{type:'nextRound'});
-    expect(s.puzzleIndex).toBe(1);
-    expect(s.deadline!-s.updatedAt).toBe(carry);
+    const second=send(s,{type:'nextRound'},HOST,0,START+10000);
+    expect(second.puzzleIndex).toBe(1);
+    expect(second.phase).toBe('tossup');
+    expect(second.deadline!-second.updatedAt).toBe(30000);
+    expect(second.remaining).toBe(30000);
+    expect(second.puzzleTimedOut).toBeUndefined();
+    expect(second.deadline!-second.updatedAt).toBeGreaterThan(firstRemaining);
+    expect(viewSession(second,PLAYERS[0],second.updatedAt).puzzle.answer).toBeUndefined();
   });
-  it('does not force another Frenzy puzzle after the shared clock expires',()=>{
+  it('does not expire the second puzzle immediately when the first had almost no time left',()=>{
+    let s=starting();
+    // Simulate an old session containing a nearly exhausted shared timer.
+    s.frenzyRemaining=1;
+    s=send(s,{type:'buzz',windowId:s.windowId!},PLAYERS[0]);
+    s=send(s,{type:'judgeBuzz',correct:true});
+    s=send(s,{type:'nextRound'});
+    expect(s.phase).toBe('tossup');
+    expect(s.deadline!-s.updatedAt).toBe(30000);
+    s.hostSeen=s.updatedAt+60000;
+    reconcile(s,s.updatedAt+5000);
+    expect(s.phase).toBe('tossup');
+    expect(s.puzzleIndex).toBe(1);
+    expect(s.puzzleTimedOut).toBeUndefined();
+  });
+  it('continues to the next Frenzy question only on the host next-puzzle action after timeout',()=>{
+    let s=starting();
+    const expiry=s.deadline!;
+    s.hostSeen=expiry+30000;
+    reconcile(s,expiry+1);
+    expect(s.phase).toBe('roundResult');
+    expect(s.puzzleTimedOut).toBe(true);
+    const next=send(s,{type:'nextRound'},HOST,0,expiry+1000);
+    expect(next.phase).toBe('tossup');
+    expect(next.roundIndex).toBe(0);
+    expect(next.puzzleIndex).toBe(1);
+    expect(next.deadline!-next.updatedAt).toBe(30000);
+  });
+});
+
+describe('audience data privacy during Frenzy timeout',()=>{
+  it('does not publish the solution until the host explicitly reveals it',()=>{
+    let s=starting();
+    const deadline=s.deadline!;
+    s.hostSeen=deadline+30000;
+    reconcile(s,deadline+1);
+    const audience=viewSession(s,HOST,deadline+1,undefined,true);
+    const player=viewSession(s,PLAYERS[0],deadline+1);
+    expect(audience.puzzleTimedOut).toBe(true);
+    expect(audience.puzzle.answer).toBeUndefined();
+    expect(player.puzzle.answer).toBeUndefined();
+    expect(audience.controllerOwned).toBe(false);
+    s=send(s,{type:'revealTimedOut'},HOST,0,deadline+1000);
+    expect(viewSession(s,HOST,deadline+1000,undefined,true).puzzle.answer).toBeTruthy();
+  });
+  it('refuses manual reveals before the timer actually expires',()=>{
     const s=starting();
-    s.hostSeen=s.deadline!+30000;
-    reconcile(s,s.deadline!+1);
-    expect(s.frenzyRemaining).toBe(0);
-    const next=send(s,{type:'nextRound'});
-    expect(next.roundIndex).toBe(1);
-    expect(next.phase).toBe('turn');
+    expect(()=>send(s,{type:'revealTimedOut'})).toThrow();
   });
 });

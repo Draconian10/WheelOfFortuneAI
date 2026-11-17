@@ -47,7 +47,10 @@ export function useRoom(id:string,role:'host'|'player'|'audience',displayToken?:
             if(!response.ok)throw new Error((await response.json().catch(()=>({}))).error??'Display disconnected.');
             data=await response.json();
           }else{
-            data=await api<SessionView>('sessions/'+id,'GET',undefined,controller||undefined,12000);
+            data=await api<SessionView>(
+              'sessions/'+id+(role==='audience'?'?view=audience':''),
+              'GET',undefined,controller||undefined,12000
+            );
           }
           accept(data,n);
         }catch(e){

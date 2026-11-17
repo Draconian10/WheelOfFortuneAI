@@ -232,7 +232,10 @@ function LiveSession({id,role,displayToken}:{
           <div className="game-progress"><span className="eyebrow">
             {s.phase==='tieTossup'||s.phase==='tieAnswer'?'TIEBREAKER':
               isBonus?'BONUS FINALE':'ROUND '+(s.roundIndex+1)+' OF '+s.totalRounds}
-          </span><span className="round-title">{s.roundTitle}</span>
+          </span><span className="round-title">{s.roundTitle}
+            {s.roundKind==='tossup'&&s.roundIndex===0&&
+              <span className="frenzy-puzzle-count"> · Puzzle {s.puzzleIndex+1}/{s.puzzlesInRound} · 30s each</span>}
+          </span>
             {isTossup&&clock}</div>
           {!['bonusCategory','bonusSpin'].includes(s.phase)&&<PuzzleBoard s={s}/>}
           {s.lastAction&&<p className="action-ticker" role="status"><Star size={15}/>
@@ -325,15 +328,22 @@ function LiveSession({id,role,displayToken}:{
           </div>}
           {s.phase==='roundResult'&&<section className="panel round-complete">
             <div className="celebration-icon"><Trophy size={40}/></div>
-            <div className="eyebrow">PUZZLE COMPLETE</div><h2>That's a wrap!</h2>
-            <p className="muted">The puzzle has been revealed. Here are the updated standings.</p>
+            <div className="eyebrow">{s.puzzleTimedOut?'TIMER COMPLETE':'PUZZLE COMPLETE'}</div>
+            <h2>{s.puzzleTimedOut?"Time's up!":"That's a wrap!"}</h2>
+            <p className="muted">{s.puzzleTimedOut?
+              'The answer stays concealed until the host chooses to reveal it. You can advance to the next puzzle instead.':
+              'The puzzle is finished. Here are the updated standings.'}</p>
             <Standings s={s}/>
-            {control&&<button className="button primary" disabled={busy||s.paused}
-              onClick={()=>doSend({type:'nextRound'})}>{s.roundKind==='tossup'&&s.roundIndex===0&&s.frenzyRemaining===0?'Next Round':
-                ['triple','tossup'].includes(s.roundKind)&&s.puzzleIndex+1<s.puzzlesInRound?
-                s.roundKind==='tossup'?'Next Frenzy Puzzle':'Next Toss-Up':
-                s.roundIndex===s.totalRounds-1?'See our finalist':'Next Round'}
-              <ArrowRight size={17}/></button>}
+            {control&&<div className="button-row centered">
+              {s.puzzleTimedOut&&<button className="button secondary" disabled={busy||s.paused}
+                onClick={()=>doSend({type:'revealTimedOut'})}>Reveal this solution</button>}
+              <button className="button primary" disabled={busy||s.paused}
+                onClick={()=>doSend({type:'nextRound'})}>
+                {['triple','tossup'].includes(s.roundKind)&&s.puzzleIndex+1<s.puzzlesInRound?
+                  s.roundKind==='tossup'&&s.roundIndex===0?'Next Frenzy Puzzle':'Next Toss-Up':
+                  s.roundIndex===s.totalRounds-1?'See our finalist':'Next Round'}
+                <ArrowRight size={17}/></button>
+            </div>}
           </section>}
           {s.phase==='bonusCategory'&&<section className="panel bonus-stage">
             <div className="bonus-star">✦</div><div className="eyebrow">THE GRAND FINALE</div>

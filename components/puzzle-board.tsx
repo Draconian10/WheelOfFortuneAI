@@ -19,7 +19,7 @@ export default function PuzzleBoard({s,small=false}:{s:SessionView;small?:boolea
         })}
       </div>)}
     </div>
-    {s.puzzle.answer&&['roundResult','bonusResult','finished','ended'].includes(s.phase)&&
+    {s.puzzle.answer&&!s.puzzleTimedOut&&['roundResult','bonusResult','finished','ended'].includes(s.phase)&&
       <div className="puzzle-solution"><span>SOLUTION</span><strong>{s.puzzle.answer}</strong></div>}
   </section>;
 }

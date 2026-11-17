@@ -610,3 +610,9 @@ body:has(.audience-container){background:#070b20}
 @media(prefers-reduced-motion:reduce){
   .spin-progress svg{animation:none}
 }
+
+/* Make the independently timed Frenzy puzzle count readable on narrow screens. */
+.frenzy-puzzle-count{display:inline-block;color:#d3e1ff;font-size:.79rem;font-weight:650;white-space:normal}
+@media(max-width:540px){
+ .frenzy-puzzle-count{display:block;margin-top:3px;font-size:.74rem}
+}
