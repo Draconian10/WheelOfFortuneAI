@@ -414,7 +414,7 @@ function LiveSession({id,role,displayToken}:{
                 <X size={16}/> End Game
               </button>}
             </div>
-          </div>
+          </div>}
           {host&&!ended&&<RecoveryRequests sessionId={id} onApproved={refresh}/>}
           {player&&<div className="panel player-instruction">
             <div className="eyebrow">HOW TO PLAY</div>
