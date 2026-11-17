@@ -170,7 +170,7 @@ describe('automatic Toss-Up reveal and standings',()=>{
     expect(s.phase).toBe('tossup');
   });
   it('holds a timed-out Frenzy puzzle for host review without disclosing its solution',()=>{
-    const s=starting();s.hostSeen=s.deadline!+10000;
+    let s=starting();s.hostSeen=s.deadline!+10000;
     reconcile(s,s.deadline!+1);
     expect(s.phase).toBe('roundResult');
     expect(s.puzzleIndex).toBe(0);
