@@ -521,6 +521,9 @@ export function applyCommand(original:GameState,command:Command,ctx:Context):Gam
       const prev=s.undo;
       ensure(prev.roundIndex===s.roundIndex&&prev.puzzleIndex===s.puzzleIndex,'Cannot undo another puzzle.');
       const recorded=new Set(s.processed);
+      // Replace the aggregate completely: Object.assign alone retains optional fields
+      // added by the action being undone (for example bonusWon or a newly awarded prize).
+      for(const key of Object.keys(s))Reflect.deleteProperty(s,key);
       Object.assign(s,structuredClone(prev));
       s.processed=[...new Set([...s.processed,...recorded])];
       s.undo=undefined;s.paused=true;s.pauseReason='Judgment undone — review and continue';
