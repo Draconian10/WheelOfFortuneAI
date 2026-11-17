@@ -38,7 +38,7 @@ function DashboardInner(){
     <header className="page-heading">
       <div><div className="eyebrow">THE HOST'S STUDIO</div>
         <h1>Your <span className="gold-text">game night</span> starts here.</h1>
-        <p className="muted">Build a show, invite three contestants, then let the wheel decide.</p>
+        <p className="muted">Build a show, invite up to five contestants, then let the wheel decide.</p>
       </div>
       <Link href="/host/edit/new" className="button primary"><Plus size={19}/> Create New Game</Link>
     </header>
