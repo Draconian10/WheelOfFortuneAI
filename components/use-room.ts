@@ -96,8 +96,15 @@ export function useRoom(id:string,role:'host'|'player'|'audience',displayToken?:
     if(!userId)return;
     let stop=false;
     let timer:ReturnType<typeof setTimeout>;
-    const poll=()=>{timer=setTimeout(async()=>{await refresh();if(!stop)poll();},
-      (role==='audience'&&displayToken?2500:realtimeRef.current?10000:3000)+Math.random()*350);};
+    const poll=()=>{
+      // A short fallback cadence lets the server reveal individual Toss-Up
+      // letters even when every client is already subscribed to Realtime.
+      const phase=reference.current?.phase;
+      const timedReveal=phase==='tossup'||phase==='tieTossup';
+      const delay=role==='audience'&&displayToken?2500
+        :timedReveal?2200:realtimeRef.current?10000:3000;
+      timer=setTimeout(async()=>{await refresh();if(!stop)poll();},delay+Math.random()*250);
+    };
     poll();
     const focus=()=>{if(document.visibilityState==='visible')void refresh();};
     window.addEventListener('online',focus);window.addEventListener('focus',focus);
