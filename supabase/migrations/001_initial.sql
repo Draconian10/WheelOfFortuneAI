@@ -194,7 +194,7 @@ begin
   and s.state->>'phase' in ('tossup','tieTossup')
   and s.state->>'windowId'=p_window::text
   and s.state->>'respondent' is null and not (s.state->>'paused')::boolean
-  and (s.state->'attempted' is null or not s.state->'attempted' ? p_user::text)
+  and (s.state->'attempted' is null or not (s.state->'attempted' ? p_user::text))
   and (s.state->>'phase'<>'tieTossup' or s.state->'tieEligible' ? p_user::text)
   and exists(select 1 from jsonb_array_elements(s.state->'players') p
     where p->>'id'=p_user::text and not (p->>'removed')::boolean)

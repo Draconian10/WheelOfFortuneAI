@@ -19,7 +19,7 @@ function GameEditor({id,owner}:{id:string;owner:string}){
   const [pin,setPin]=useState(''),[busy,setBusy]=useState(false),[status,setStatus]=useState(''),[error,setError]=useState('');
   const [preview,setPreview]=useState(false),[jsonOpen,setJsonOpen]=useState(false),[jsonText,setJsonText]=useState('');
   const [jsonDirty,setJsonDirty]=useState(false),[recoverable,setRecoverable]=useState('');
-  const version=useRef(0),latest=useRef<GameDefinition>();
+  const version=useRef(0),latest=useRef<GameDefinition|undefined>(undefined);
   const dirty=useRef(false),saving=useRef(false);
   const key='fortune:editor:'+owner+':'+id;
   useEffect(()=>{

@@ -106,6 +106,8 @@ function completedTossup(s:GameState,ctx:Context,player:Player){
     ?(s.puzzleIndex===0?1000:2000):1000;
   addBanked(s,player,value,ctx,'Solved '+(round?.title??'Toss-Up'));
   s.roundStarterId=player.id;
+  if(s.roundIndex===0&&s.definition.opening==='frenzy'&&s.deadline===undefined)
+    s.deadline=ctx.now+(s.remaining??TOSSUP_MS);
   if(round?.kind==='triple'){
     s.tripleWinners.push(player.id);
     if(s.puzzleIndex===2 && s.tripleWinners.length===3 &&
@@ -228,6 +230,7 @@ export function applyCommand(original:GameState,command:Command,ctx:Context):Gam
     }
     case 'claim':
       ensure(!FINISHED.has(s.phase),'Game already ended.');
+      if(s.deadline!==undefined)s.remaining=Math.max(0,s.deadline-ctx.now);
       s.paused=true;s.pauseReason='Ready to resume';s.deadline=undefined;
       s.controller=command.controller;s.hostSeen=ctx.now;
       break;
