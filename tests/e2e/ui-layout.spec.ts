@@ -2,6 +2,11 @@ import {expect,test,type Page} from '@playwright/test';
 
 async function fixture(page:Page,classNames:string,html:string){
   await page.goto('/');
+  // The fixture must wait until React owns the SSR wheel before replacing main.
+  await page.waitForFunction(()=>{
+    const wheel=document.querySelector('.wheel-disc');
+    return Boolean(wheel)&&Object.keys(wheel as Element).some(key=>key.startsWith('__reactFiber'));
+  },null,{timeout:20000});
   await page.evaluate(({classNames,html})=>{
     const main=document.querySelector('main');
     if(!main)throw new Error('Missing main content.');
@@ -235,6 +240,10 @@ test('continued game button has a high-contrast dark play triangle',async({page}
 });
 test('masthead stays a single row with account controls on mobile',async({page})=>{
   await page.goto('/');
+  await page.waitForFunction(()=>{
+    const wheel=document.querySelector('.wheel-disc');
+    return !!wheel&&Object.keys(wheel).some(key=>key.startsWith('__reactFiber'));
+  });
   await page.evaluate(()=>{
     const el=document.createElement('div');
     el.className='site-account';
