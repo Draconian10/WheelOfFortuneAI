@@ -49,14 +49,7 @@ async function configure(context:BrowserContext,id:string,host=false){
     }));
     if(host)sessionStorage.setItem('fortune:launch:'+room,controller);
   },{subject,token,host,room:s.id,controller:CONTROLLER});
-  context.on('request',request=>{
-    if(request.url().includes('supabase'))console.log('[fixture auth request]',request.method(),request.url());
-  });
-  context.on('requestfailed',request=>{
-    if(request.url().includes('supabase'))console.log('[fixture auth failed]',request.url(),request.failure());
-  });
   await context.route('https://example.supabase.co/auth/v1/**',async route=>{
-    console.log('[fixture auth mocked]',route.request().method(),route.request().url());
     await route.fulfill({status:200,json:subject});
   });
   // No real Supabase subscription should be established by the browser fixture.
@@ -122,15 +115,9 @@ test('complete 5-contestant browser game: join, live buzz, host control, rounds,
   };
   try{
     const host=await create(HOST,true);
-    host.on('console',msg=>{if(msg.type()==='error')console.log('[fixture console]',msg.text());});
     host.on('pageerror',err=>console.log('[fixture page error]',err.message));
     await host.goto('/host/session/'+s.id);
-    await host.waitForTimeout(900);
-    console.log('[fixture host initial page]',(await host.locator('body').innerText()).slice(0,1400));
-    console.log('[fixture auth local storage]',await host.evaluate(()=>({
-      keys:Object.keys(localStorage),sessionKey:localStorage.getItem('sb-example-auth-token')?.slice(0,130)
-    })));
-    await expect(host.locator('[data-game-phase="lobby"]')).toBeVisible({timeout:10000});
+    await expect(host.locator('[data-game-phase="lobby"]')).toBeVisible({timeout:15000});
     note('Host logged in, controls active, empty room');
     const contestants:Page[]=[];
     for(let i=0;i<5;i++){
