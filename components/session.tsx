@@ -333,7 +333,10 @@ function LiveSession({id,role,displayToken}:{
                 (s.phase!=='speedup'||(s.speedupCanSolve&&remaining>0))&&
                 <div className="host-oral">
                 <button className="text-button" onClick={()=>{
-                  if(active&&confirm('Confirm '+active.name+' solved the puzzle correctly aloud?'))
+                  // A confirmation popup consumes the entire three-second
+                  // Speed-Up interval; the host must be able to award a spoken
+                  // solution immediately while the contestant's window is open.
+                  if(active&&(s.phase==='speedup'||confirm('Confirm '+active.name+' solved the puzzle correctly aloud?')))
                     doSend({type:'hostSolve',playerId:active.id});
                 }}>Mark spoken solution correct</button>
               </div>}
