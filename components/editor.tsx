@@ -152,7 +152,7 @@ function GameEditor({id,owner}:{id:string;owner:string}){
       <div className="round-tabs">
         {game.rounds.map((r,i)=><button key={r.id}
           className={'round-tab '+(!editingBonus&&!editingTie&&roundIndex===i?'active':'')}
-          onClick={()=>activateRound(i)}><span className="round-number">{i+1}</span>{r.title}</button>)}
+          onClick={()=>activateRound(i)}><span className="stage-number">STAGE {i+1}</span>{r.title}</button>)}
         <button className={'round-tab '+(editingBonus?'active':'')} onClick={()=>{
           setEditingBonus(true);setEditingTie(false);setPuzzleIndex(0);
         }}>✦ Bonus Round</button>

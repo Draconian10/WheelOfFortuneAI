@@ -22,6 +22,8 @@ import RecoveryCode from './recovery-code';
 import RecoveryRequests from './recovery-requests';
 import DisplayAccess from './display-access';
 import ResultsConfetti from './results-confetti';
+import HostAnswer from './host-answer';
+import WedgeHelp from './wedge-help';
 
 const VOWELS='AEIOU';
 const LETTERS='ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
@@ -51,6 +53,9 @@ function LiveSession({id,role,displayToken}:{
   const respondent=s?.players.find(p=>p.id===s.respondent);
   const finalist=s?.players.find(p=>p.id===s.bonusPlayerId);
   const canAct=!!s&&connected&&!busy&&!s.paused&&!spinPendingVisual&&(control||(player&&s.currentPlayerId===userId));
+  const wedgeInfo=!!s&&!spinPendingVisual&&s.phase!=='spinning'&&
+    (s.pendingSpin?.wedge||(/landed on|hit BANKRUPT|Wild Card collected|Million Dollar Wedge collected/i.test(s.lastAction??'')
+      ?s.spin?.wedge:undefined));
   const canBuzz=!!s&&player&&connected&&!busy&&!s.paused&&
     ['tossup','tieTossup'].includes(s.phase)&&remaining>0&&!!s.windowId&&
     !s.attempted.includes(userId)&&(s.phase!=='tieTossup'||!!s.tieEligible?.includes(userId));
@@ -230,15 +235,20 @@ function LiveSession({id,role,displayToken}:{
         <div className="game-primary">
           <div className="game-progress"><span className="eyebrow">
             {s.phase==='tieTossup'||s.phase==='tieAnswer'?'TIEBREAKER':
-              isBonus?'BONUS FINALE':'ROUND '+(s.roundIndex+1)+' OF '+s.totalRounds}
+              isBonus?'BONUS FINALE':'STAGE '+(s.roundIndex+1)+' OF '+s.totalRounds}
           </span><span className="round-title">{s.roundTitle}
             {s.roundKind==='tossup'&&s.roundIndex===0&&
               <span className="frenzy-puzzle-count"> · Puzzle {s.puzzleIndex+1}/{s.puzzlesInRound} · 30s each</span>}
           </span>
             {isTossup&&clock}</div>
           {!['bonusCategory','bonusSpin'].includes(s.phase)&&<PuzzleBoard s={s}/>}
-          {s.lastAction&&<p className="action-ticker" role="status"><Star size={15}/>
-            {spinPendingVisual?(active?.name??'The contestant')+' is spinning the wheel…':s.lastAction}</p>}
+          {s.lastAction&&<div className="action-ticker" role="status" aria-live="polite">
+            <span className="action-ticker-icon"><Star size={19} aria-hidden="true"/></span>
+            <div><span className="action-ticker-label">LIVE GAME UPDATE</span>
+              <strong>{spinPendingVisual?(active?.name??'The contestant')+' is spinning the wheel…':s.lastAction}</strong>
+            </div>
+          </div>}
+          {wedgeInfo&&<WedgeHelp kind={wedgeInfo.kind}/>}
           {isTossup&&<section className="panel phase-panel tossup-stage">
             <div className="eyebrow">{s.phase==='tieTossup'||s.phase==='tieAnswer'?'SUDDEN DEATH':'BUZZER ROUND'}</div>
             {s.phase==='tieTossup'||s.phase==='tossup'?
@@ -256,11 +266,12 @@ function LiveSession({id,role,displayToken}:{
               <>
                 <h2>{respondent?.name} buzzed in first!</h2>
                 <p className="muted">Please give your full solution aloud. The host judges the response.</p>
+                {host&&s.puzzle.answer&&<HostAnswer answer={s.puzzle.answer} hint={s.puzzle.hint}/>}
                 {control&&<div className="button-row centered">
                   <button className="button success" onClick={()=>doSend({type:'judgeBuzz',correct:true})} disabled={busy||s.paused}>
-                    <Check size={18}/> Correct <span className="shortcut">(C)</span></button>
+                    <Check size={18}/> Correct</button>
                   <button className="button danger" onClick={()=>doSend({type:'judgeBuzz',correct:false})} disabled={busy||s.paused}>
-                    <X size={18}/> Incorrect <span className="shortcut">(X)</span></button></div>}
+                    <X size={18}/> Incorrect</button></div>}
                 {player&&<div className="buzz-answer">{s.respondent===userId?'YOU ARE UP!':'Watching '+respondent?.name+' answer'}</div>}
               </>}
           </section>}
@@ -329,6 +340,7 @@ function LiveSession({id,role,displayToken}:{
                   onClick={()=>doSend({type:'pass'})}>Pass turn <ArrowRight size={16}/></button>}
               </>}
               {solutionForm}
+              {host&&s.puzzle.answer&&s.phase!=='spinning'&&<HostAnswer answer={s.puzzle.answer} hint={s.puzzle.hint}/>}
               {control&&['turn','letter','express','speedup'].includes(s.phase)&&
                 (s.phase!=='speedup'||(s.speedupCanSolve&&remaining>0))&&
                 <div className="host-oral">
@@ -397,6 +409,7 @@ function LiveSession({id,role,displayToken}:{
           </section>}
           {s.phase==='bonusTimer'&&<section className="panel bonus-stage">
             <div className="eyebrow">TEN SECONDS TO FORTUNE</div><h2>It's all on this puzzle.</h2>{clock}
+            {host&&s.puzzle.answer&&<HostAnswer answer={s.puzzle.answer} hint={s.puzzle.hint}/>} 
             {player&&userId===s.bonusPlayerId&&<form className="solve-form" onSubmit={e=>{
               e.preventDefault();doSend({type:'bonusSolve',text:solve});
             }}><label>Your final solution<input autoFocus required maxLength={180} value={solve}

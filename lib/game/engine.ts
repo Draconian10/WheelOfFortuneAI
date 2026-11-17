@@ -494,8 +494,13 @@ export function applyCommand(original:GameState,command:Command,ctx:Context):Gam
         }
         break;
       }
-      if(spin?.wedge.kind==='wild')p.wildCard=true;
-      if(spin?.wedge.kind==='million')p.pendingMillionWedge=true;
+      if(spin?.wedge.kind==='wild'){
+        p.wildCard=true;s.lastAction+=' Wild Card collected for an extra consonant!';
+      }
+      if(spin?.wedge.kind==='million'){
+        p.pendingMillionWedge=true;
+        s.lastAction+=' Million Dollar Wedge collected—solve this puzzle to secure it!';
+      }
       s.wildCardValue=spin?.wedge.kind==='cash'&&!vowel&&p.wildCard?cash:undefined;
       if(spin?.wedge.kind==='mystery'){
         s.mysteryCash=cash*count;s.phase='mysteryChoice';break;

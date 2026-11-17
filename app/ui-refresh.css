@@ -624,3 +624,49 @@ body:has(.audience-container){background:#070b20}
   background:rgba(9,20,63,.45);font-weight:800;color:#f3f5ff}
 .speedup-solve-clock .timer{margin:0;min-width:100px}
 @media(max-width:480px){.speedup-solve-clock{justify-content:center;text-align:center}}
+
+/* Host-only judging reference: private answer is never included in player DOM. */
+.host-private-answer{
+  width:100%;padding:13px 15px;border:1px solid #789cc0;border-radius:13px;
+  background:linear-gradient(120deg,#102b55,#15204b);text-align:left;
+  box-shadow:inset 3px 0 #f4c965;
+}
+.host-private-answer-top{display:flex;gap:8px;align-items:center;flex-wrap:wrap;
+  color:#ffe1a1;letter-spacing:.095em;font-weight:900;font-size:.72rem}
+.host-private-answer-top small{margin-left:auto;color:#c0cce5;font-size:.65rem;letter-spacing:.04em}
+.host-private-answer>strong{display:block;margin-top:7px;color:#f9fbff;font-size:clamp(1.1rem,2vw,1.45rem);
+  font-family:'Barlow Condensed',sans-serif;font-weight:900;overflow-wrap:anywhere;letter-spacing:.03em}
+.host-private-answer>p{margin-top:5px;color:#d1ddf6;font-size:.77rem;line-height:1.5}
+.tossup-stage .host-private-answer{max-width:630px;margin:0 auto 12px}
+.turn-panel .host-private-answer{margin-top:6px}
+
+/* Separate a show segment number from its official round title. */
+.round-tab .stage-number{display:inline-block;flex-shrink:0;padding:3px 6px;border:1px solid currentColor;
+  border-radius:6px;font-size:.62rem;letter-spacing:.045em;opacity:.86}
+.lobby-players>p.muted.tiny{margin-top:14px;line-height:1.5}
+
+/* Strongly visible updates and non-blocking special wedge explanations. */
+.action-ticker{display:flex;align-items:center;gap:12px;
+  margin-top:14px;padding:14px 17px;
+  border:1px solid #ecc976;background:linear-gradient(115deg,#333562,#1f376d);
+  border-radius:13px;color:#fff2c9;box-shadow:0 3px 18px #0002}
+.action-ticker-icon{display:grid;place-items:center;width:37px;height:37px;flex-shrink:0;
+  border-radius:10px;background:#f6ca71;color:#16254e}
+.action-ticker>div{min-width:0;display:flex;flex-direction:column;gap:3px}
+.action-ticker-label{font-size:.62rem;color:#ffdc8d;letter-spacing:.12em;font-weight:950}
+.action-ticker strong{font-size:1.01rem;color:#fff5dd;line-height:1.45;overflow-wrap:anywhere}
+.wedge-help{display:flex;align-items:flex-start;gap:12px;padding:13px 16px;margin-top:10px;
+  border:1px solid #8091c5;border-radius:13px;background:#1b2b5b;color:#f1f5ff}
+.wedge-help-icon{display:grid;place-items:center;color:#ffdf8e;flex-shrink:0;
+  border-radius:9px;background:#344576;width:35px;height:35px}
+.wedge-help strong{font-size:.88rem;letter-spacing:.045em;color:#ffe3a2}
+.wedge-help p{font-size:.81rem;line-height:1.55;margin:5px 0 0;color:#e0e8fa}
+.wedge-help-bankrupt{border-color:#b76b86;background:#352446}
+.wedge-help-bankrupt strong{color:#ffbdcb}
+.wedge-help-million{border-color:#e4c16d}
+@media(max-width:540px){
+  .action-ticker{padding:11px 12px;gap:9px}
+  .action-ticker strong{font-size:.92rem}
+  .wedge-help{padding:11px 12px}
+  .host-private-answer-top small{margin-left:0}
+}
