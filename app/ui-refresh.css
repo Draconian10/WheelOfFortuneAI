@@ -613,3 +613,7 @@ body:has(.audience-container){background:#070b20}
   .site-header-inner{display:flex;flex-wrap:nowrap;min-height:62px;justify-content:space-between}
   .site-header .site-account{min-width:0;margin-left:auto}
 }
+
+/* Pause banner icons never stretch the alert row. */
+.pause-banner>svg{width:20px;height:20px;flex:0 0 20px}
+.pause-banner>div{min-width:0}

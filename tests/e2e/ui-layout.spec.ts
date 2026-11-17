@@ -144,7 +144,7 @@ test('light broadcast header contrasts with navy application canvas',async({page
 test('lobby action area clearly distinguishes starting from ending',async({page})=>{
   await fixture(page,'container shell-section session-container',
     '<div class="lobby-layout"><section class="panel invite-panel"><div class="lobby-actions">'+
-    '<button class="button primary full">Start the Show</button><div class="lobby-end-divider"></div>'+
+    '<button class="button primary full">Start the Show</button>'+
     '<button class="button lobby-end-button full">End Session</button></div></section></div>');
   const begin=page.getByRole('button',{name:'Start the Show'});
   const end=page.getByRole('button',{name:'End Session'});
@@ -219,7 +219,7 @@ test('winner text remains stationary while confetti overlay is present or remove
 
 test('continued game button has a high-contrast dark play triangle',async({page})=>{
   await fixture(page,'container shell-section session-container',
-    '<div class="pause-banner"><svg aria-hidden="true" viewBox="0 0 24 24"></svg><div><strong>Host reconnecting — game paused</strong></div>'+
+    '<div class="pause-banner"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24"></svg><div><strong>Host reconnecting — game paused</strong></div>'+
     '<button class="button primary pause-resume-button"><svg class="play-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3l15 9L5 21z"/></svg>Continue</button></div>');
   const button=page.getByRole('button',{name:'Continue'});
   await expect(button).toBeVisible();
