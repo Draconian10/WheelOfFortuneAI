@@ -32,8 +32,8 @@ export default function SiteHeader(){
       <Link className="brand" href="/" aria-label="Fortune Live, home">
         <span className="brand-wheel" aria-hidden="true"><span/></span>
         <span className="brand-copy">
-          <span className="brand-title">FORTUNE<span className="brand-gold">LIVE</span></span>
-          <span className="brand-caption">THE GAME NIGHT STUDIO</span>
+          <span className="brand-title">FORTUNE</span>
+          <span className="brand-live">LIVE</span>
         </span>
       </Link>
       <nav className="site-nav" aria-label="Main navigation">

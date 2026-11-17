@@ -33,6 +33,7 @@ const fakeWheel='<div class="wheel-area"><div class="wheel-assembly"><div class=
 test('single shared header accommodates a signed-in host',async({page})=>{
   await page.goto('/');
   await expect(page.locator('.site-header .brand-wheel')).toBeVisible();
+  await expect(page.locator('.brand-live')).toHaveText('LIVE');
   await expect(page.locator('.site-header .site-nav .nav-link')).toHaveCount(2);
   await page.evaluate(()=>{
     const el=document.createElement('div');
@@ -67,7 +68,7 @@ test('SVG wheel uses fitted wedge labels and readable WHEEL and FORTUNE arcs',as
   expect(data.wedgeLabels).toBe(24);
   await fits(page);
 });
-test('slate palette provides WCAG AA contrast for normal text',async({page})=>{
+test('deep royal-blue palette provides WCAG AA contrast for normal text',async({page})=>{
   await page.goto('/');
   const values=await page.evaluate(()=>{
     const s=getComputedStyle(document.documentElement);
@@ -119,5 +120,38 @@ test('host gameplay, player buzzer, and audience layouts fit',async({page})=>{
   await fits(page);
   await fixture(page,'container shell-section session-container audience-container','<div class="live-heading"><div><h1>Friday Night Fortune</h1></div></div><div class="game-layout"><div class="game-primary">'+board+fakeWheel+'</div>'+sidebar+'</div>');
   await expect(page.locator('.site-header')).toBeHidden();
+  await fits(page);
+});
+
+
+test('light broadcast header contrasts with navy application canvas',async({page})=>{
+  await page.goto('/');
+  const colors=await page.evaluate(()=>{
+    const header=getComputedStyle(document.querySelector('.site-header')!).backgroundColor;
+    const root=getComputedStyle(document.documentElement);
+    const panel=root.getPropertyValue('--panel').trim();
+    const main=getComputedStyle(document.body).backgroundImage;
+    return {header,panel,main};
+  });
+  expect(colors.header).toBe('rgb(250, 250, 255)');
+  expect(colors.panel).toBe('#17234d');
+  expect(colors.main).toContain('rgb(16, 22, 54)');
+});
+test('lobby action area clearly distinguishes starting from ending',async({page})=>{
+  await fixture(page,'container shell-section session-container',
+    '<div class="lobby-layout"><section class="panel invite-panel"><div class="lobby-actions">'+
+    '<button class="button primary full">Start the Show</button><div class="lobby-end-divider"></div>'+
+    '<button class="button lobby-end-button full">End Session</button></div></section></div>');
+  const begin=page.getByRole('button',{name:'Start the Show'});
+  const end=page.getByRole('button',{name:'End Session'});
+  await expect(begin).toBeVisible();
+  await expect(end).toBeVisible();
+  const colors=await page.evaluate(()=>{
+    const primary=getComputedStyle(document.querySelector('.lobby-actions .primary')!).backgroundImage;
+    const end=getComputedStyle(document.querySelector('.lobby-end-button')!).backgroundColor;
+    return {primary,end};
+  });
+  expect(colors.primary).toContain('linear-gradient');
+  expect(colors.end).toBe('rgb(58, 36, 67)');
   await fits(page);
 });
