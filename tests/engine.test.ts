@@ -276,3 +276,33 @@ describe('flexible lobby with one to five contestants',()=>{
     expect(s.players.find(p=>p.id===ids[4])?.banked).toBe(1000);
   });
 });
+
+
+describe('ending a session safely from the lobby',()=>{
+  it('closes a room with zero players without displaying a fabricated winner',()=>{
+    let s=newSession(starterGame(),'game',HOST,'864200',START,CONTROLLER);
+    s=send(s,{type:'end'});
+    expect(s.phase).toBe('ended');
+    expect(s.closedInLobby).toBe(true);
+    expect(s.locked).toBe(true);
+    expect(s.windowId).toBeUndefined();
+    expect(viewSession(s,HOST,START,CONTROLLER).closedInLobby).toBe(true);
+    expect(()=>send(s,{type:'join',name:'Too late'},PLAYERS[0])).toThrow();
+    expect(()=>send(s,{type:'start'})).toThrow();
+  });
+  it('ends the lobby for its joined contestants, but only from the controlling host',()=>{
+    let s=newSession(starterGame(),'game',HOST,'864201',START,CONTROLLER);
+    s=send(s,{type:'join',name:'First'},PLAYERS[0]);
+    expect(()=>send(s,{type:'end'},PLAYERS[0])).toThrow();
+    s=send(s,{type:'end'});
+    expect(s.phase).toBe('ended');
+    expect(s.closedInLobby).toBe(true);
+    expect(viewSession(s,PLAYERS[0],START).closedInLobby).toBe(true);
+  });
+  it('keeps a started game termination distinct from a cancelled lobby',()=>{
+    let s=starting();
+    s=send(s,{type:'end'});
+    expect(s.phase).toBe('ended');
+    expect(s.closedInLobby).toBe(false);
+  });
+});

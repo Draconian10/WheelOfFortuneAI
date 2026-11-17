@@ -5,7 +5,7 @@ import {QRCodeSVG} from 'qrcode.react';
 import {
   ArrowLeft,ArrowRight,Check,X,Play,Pause,RotateCcw,Zap,Coins,Gift,Lock,Unlock,
   Copy,Monitor,Trophy,Volume2,VolumeX,Wifi,WifiOff,Timer,Star,CheckCircle2,Hand,
-  CircleDollarSign,RefreshCcw
+  CircleDollarSign,RefreshCcw,Power,Users
 } from 'lucide-react';
 import {HostAuth,SetupNotice} from './auth';
 import {api,configured,money} from '@/lib/client';
@@ -122,12 +122,14 @@ function LiveSession({id,role,displayToken}:{
     <CheckCircle2 size={19}/> Solve Puzzle</button>;
   const resultView=<section className="panel celebration">
     {s.phase==='finished'&&<ResultsConfetti sessionId={id}/>}
-    <div className="celebration-icon"><Trophy size={48}/></div>
-    <div className="eyebrow">{s.phase==='finished'?'SHOW CHAMPION':'THE SHOW HAS ENDED'}</div>
-    <h2>{(finalist??[...s.players].sort((a,b)=>total(b)-total(a))[0])?.name} {s.phase==='finished'?'wins!':'took the spotlight!'}</h2>
-    {s.bonusWon!==undefined&&<p className="muted">Bonus Round: {s.bonusWon?'Solved! '+(s.bonusPrize?.label??'Prize')+' added to total.':'No solve this time. The envelope held '+(s.bonusPrize?.label??'a mystery prize')+'.'}</p>}
-    <Standings s={s}/>
-    <div className="button-row centered">{host&&<button className="button secondary" onClick={async()=>{
+    <div className="celebration-icon">{s.closedInLobby?<Lock size={44}/>:<Trophy size={48}/>}</div>
+    <div className="eyebrow">{s.closedInLobby?'SESSION CLOSED':s.phase==='finished'?'SHOW CHAMPION':'THE SHOW HAS ENDED'}</div>
+    {s.closedInLobby?<><h2>Lobby closed.</h2>
+      <p className="muted">The room has ended without starting a game. Any joined players will see that the session is closed.</p></>:
+      <><h2>{(finalist??[...s.players].sort((a,b)=>total(b)-total(a))[0])?.name} {s.phase==='finished'?'wins!':'took the spotlight!'}</h2>
+      {s.bonusWon!==undefined&&<p className="muted">Bonus Round: {s.bonusWon?'Solved! '+(s.bonusPrize?.label??'Prize')+' added to total.':'No solve this time. The envelope held '+(s.bonusPrize?.label??'a mystery prize')+'.'}</p>}
+      <Standings s={s}/></>}
+    <div className="button-row centered">{host&&!s.closedInLobby&&<button className="button secondary" onClick={async()=>{
       try{
         const token=await (await import('@/lib/client')).supabase().auth.getSession();
         const r=await fetch('/api/sessions/'+id+'/results',{headers:{Authorization:'Bearer '+token.data.session?.access_token}});
@@ -182,6 +184,13 @@ function LiveSession({id,role,displayToken}:{
             <button className="button primary full" disabled={busy||s.paused||s.players.length<MIN_PLAYERS}
               onClick={()=>doSend({type:'start'})}><Play size={18}/> Start the Show</button>
             <p className="muted tiny">Start anytime with {MIN_PLAYERS}–{MAX_PLAYERS} contestants. You don't need a full lobby.</p>
+            <div className="lobby-end-divider"/>
+            <button type="button" className="button lobby-end-button full"
+              disabled={busy||!connected}
+              onClick={()=>{
+                if(window.confirm('End this session for everyone? The room code will stop working and this action cannot be undone.'))
+                  doSend({type:'end'});
+              }}><Power size={17}/> End Session</button>
           </div>}
           {host&&<DisplayAccess sessionId={id} placement="lobby"/>}
         </section>
@@ -194,7 +203,10 @@ function LiveSession({id,role,displayToken}:{
             <span className="ready-pill">● READY</span>
             {control&&<button className="icon-button" title={'Remove '+p.name}
               onClick={()=>{if(confirm('Remove '+p.name+' from the lobby?'))doSend({type:'remove',playerId:p.id});}}><X size={16}/></button>}
-          </div>):<div className="empty-players">The first contestant will appear here.</div>}
+          </div>):<div className="empty-players"><span className="empty-players-icon"><Users size={36} aria-hidden="true"/></span>
+            <strong>No contestants yet</strong>
+            <p>The first player will appear here after joining with the six-digit code.</p>
+          </div>}
           <div className="waiting-bar" role="progressbar" aria-label="Contestant seats filled"
             aria-valuenow={s.players.length} aria-valuemin={0} aria-valuemax={MAX_PLAYERS}>
             <span style={{width:(s.players.length/MAX_PLAYERS*100)+'%'}}/></div>

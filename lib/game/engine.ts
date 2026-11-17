@@ -536,6 +536,10 @@ export function applyCommand(original:GameState,command:Command,ctx:Context):Gam
       break;
     }
     case 'end':
+      // Preserve a separate cancellation state: a lobby without a started game
+      // should not announce a winner or show an empty results scoreboard.
+      s.closedInLobby=s.phase==='lobby';
+      s.lastAction=s.closedInLobby?'Lobby closed by the host.':'The host ended the game.';
       s.phase='ended';s.locked=true;s.paused=false;s.deadline=undefined;s.windowId=undefined;break;
   }
   if(command.type!=='heartbeat'){
@@ -555,6 +559,7 @@ export function viewSession(s:GameState,userId:string,now:number,controller?:str
   const extra=s.phase.startsWith('bonus')||s.phase==='finished';
   return {
     id:s.id,gameId:s.gameId,title:s.title,joinCode:s.joinCode,phase:s.phase,
+    closedInLobby:s.closedInLobby,
     version:s.version,actionVersion:s.actionVersion,
     roundIndex:s.roundIndex,totalRounds:s.definition.rounds.length,
     roundTitle:extra?'Bonus Round':(s.phase==='tieTossup'||s.phase==='tieAnswer'?'Sudden-Death Toss-Up':round?.title??''),
