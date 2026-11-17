@@ -37,7 +37,7 @@ export function resultsCsv(s:GameState,downloadedAt=Date.now()):string{
   const section=(name:string,header:CsvRow)=>{rows.push([],[name],header);};
   rows.push(['FORTUNE LIVE — RESULTS'],['GAME SUMMARY'],['Field','Value'],
     ['Show title',s.title],
-    ['Session ID',s.id],['Game ID',s.gameId],
+    ['Session ID',s.id],['Game ID',s.gameId],['Join game code',s.joinCode],
     ['Started / room created (UTC)',safeDate(s.createdAt)],
     ['Last updated (UTC)',safeDate(s.updatedAt)],
     ['Report generated (UTC)',safeDate(downloadedAt)],
