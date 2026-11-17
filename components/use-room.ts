@@ -10,6 +10,7 @@ export function useRoom(id:string,role:'host'|'player'|'audience',displayToken?:
   const reference=useRef<SessionView|undefined>(undefined);
   const [userId,setUserId]=useState('');
   const [controller,setController]=useState('');
+  const launchController=useRef<{id:string;value:string}|undefined>(undefined);
   const [connected,setConnected]=useState(false);
   const [error,setError]=useState('');
   const [busy,setBusy]=useState(false);
@@ -60,7 +61,9 @@ export function useRoom(id:string,role:'host'|'player'|'audience',displayToken?:
   },[id,role,displayToken,controller,accept]);
   useEffect(()=>{
     if(role!=='host')return;
-    setController(takeLaunchController(id)??crypto.randomUUID());
+    if(launchController.current?.id!==id)
+      launchController.current={id,value:takeLaunchController(id)??crypto.randomUUID()};
+    setController(launchController.current.value);
   },[id,role]);
   useEffect(()=>{
     if(role==='audience'&&displayToken){setUserId('audience');void refresh();return;}

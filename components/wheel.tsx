@@ -20,14 +20,16 @@ export default function Wheel({kind,spin,compact=false}:{kind:RoundKind;spin?:Sp
   const angleRef=useRef(0);
   useEffect(()=>{
     if(!spin||spin.id===seen.current)return;
-    seen.current=spin.id;
     const desired=(360-spin.index*15)%360;
     const current=((angleRef.current%360)+360)%360;
     const extra=((desired-current)+360)%360;
     const next=angleRef.current+360*6+extra;
-    angleRef.current=next;
-    setSpinning(true);
-    const frame=requestAnimationFrame(()=>setRotation(next));
+    const frame=requestAnimationFrame(()=>{
+      angleRef.current=next;
+      seen.current=spin.id;
+      setSpinning(true);
+      setRotation(next);
+    });
     return()=>cancelAnimationFrame(frame);
   },[spin?.id,spin?.index]);
   return (
