@@ -169,3 +169,47 @@ describe('automatic Toss-Up reveal and standings',()=>{
     expect(s.phase).toBe('tossup');
   });
 });
+
+describe('judgment corrections',()=>{
+  it('can undo a correct regular-round solve before moving to the next round',()=>{
+    let s=regular();s.players[0].roundMoney=1000;
+    s=send(s,{type:'solve',text:'THE FUTURE IS BRIGHT'},PLAYERS[0]);
+    expect(s.phase).toBe('roundResult');
+    expect(s.players[0].banked).toBe(1000);
+    expect(s.undo).toBeDefined();
+    s=send(s,{type:'undo'});
+    expect(s.phase).toBe('turn');
+    expect(s.players[0].banked).toBe(0);
+    expect(s.players[0].roundMoney).toBe(1000);
+    expect(s.paused).toBe(true);
+  });
+  it('keeps the selected bonus prize concealed until the final reveal',()=>{
+    let s=regular();s.phase='bonusSpin';s.bonusPlayerId=PLAYERS[0];
+    s=send(s,{type:'spinBonus'},PLAYERS[0],0);
+    const host=viewSession(s,HOST,START,CONTROLLER);
+    const player=viewSession(s,PLAYERS[0],START);
+    expect(host.bonusPrize).toBeUndefined();
+    expect(player.bonusPrize).toBeUndefined();
+  });
+  it('allows the host to reverse an incorrect bonus judgment',()=>{
+    let s=regular();s.phase='bonusSpin';s.bonusPlayerId=PLAYERS[0];
+    s=send(s,{type:'spinBonus'},PLAYERS[0],0);
+    s=send(s,{type:'chooseBonus',index:0},PLAYERS[0]);
+    for(const letter of ['B','C','D','A'])s=send(s,{type:'bonusLetter',letter},PLAYERS[0]);
+    s=send(s,{type:'startBonus'});
+    s=send(s,{type:'bonusJudge',correct:false});
+    expect(s.phase).toBe('bonusResult');
+    s=send(s,{type:'undo'});
+    expect(s.phase).toBe('bonusTimer');
+    expect(s.bonusWon).toBeUndefined();
+    expect(s.paused).toBe(true);
+  });
+  it('shows updated standings between traditional opening Toss-Ups',()=>{
+    let s=starting();s.definition.opening='traditional';s.hostSeen=START+100000;
+    s=send(s,{type:'buzz',windowId:s.windowId!},PLAYERS[0]);
+    s=send(s,{type:'judgeBuzz',correct:true});
+    expect(s.phase).toBe('roundResult');expect(s.players[0].banked).toBe(1000);
+    s=send(s,{type:'nextRound'});
+    expect(s.roundIndex).toBe(0);expect(s.puzzleIndex).toBe(1);
+  });
+});
