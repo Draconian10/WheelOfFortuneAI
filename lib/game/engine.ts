@@ -12,7 +12,7 @@ export const MAX_PLAYERS = 5;
 const VOWELS = 'AEIOU';
 const BASE_BONUS = 'RSTLNE';
 const HOST_COMMANDS = new Set([
-  'claim','pause','continue','lockLobby','remove','start','nextRound','revealLetter','revealTimedOut',
+  'claim','pause','continue','lockLobby','remove','start','nextRound','revealTimedOut',
   'judgeBuzz','hostSolve','speedUp','bonusJudge','finish','undo','end'
 ]);
 const FINISHED = new Set(['finished','ended']);
@@ -214,8 +214,14 @@ function revealAutomatically(s:GameState,now:number){
     return value>>>0;
   };
   letters.sort((a,b)=>hash(a)-hash(b)||a.localeCompare(b));
-  const target=Math.min(letters.length,Math.max(0,Math.floor((now-s.puzzleStartedAt)/2300)));
-  for(const letter of letters.slice(0,target))if(!s.revealed.includes(letter))s.revealed.push(letter);
+  // Pacing depends on distinct letters rather than a fixed reveal interval.
+  // The former 2.3s/letter rule revealed short puzzles before time expired.
+  // Keep at least one distinct letter hidden while the buzzer remains open.
+  const elapsed=Math.max(0,now-s.puzzleStartedAt);
+  const target=Math.min(Math.max(0,letters.length-1),
+    Math.floor(elapsed*letters.length/TOSSUP_MS));
+  // Deterministic state also fixes older over-revealed sessions still buzzing.
+  s.revealed=letters.slice(0,target);
 }
 export function reconcile(s:GameState,now:number){
   if(FINISHED.has(s.phase)||s.paused)return;
@@ -310,14 +316,6 @@ export function applyCommand(original:GameState,command:Command,ctx:Context):Gam
       const players=activePlayers(s);
       s.roundStarterId=players[random(ctx,players.length)].id;setRound(s,ctx);
       break;
-    case 'revealLetter':{
-      phase('tossup','tieTossup');
-      const remaining=[...new Set(currentPuzzle(s).answer.toUpperCase().match(/[A-Z]/g)??[])]
-        .filter(c=>!s.revealed.includes(c));
-      if(remaining.length){const letter=remaining[random(ctx,remaining.length)];
-        s.revealed.push(letter);s.lastAction='A letter was revealed.';}
-      break;
-    }
     case 'buzz':{
       phase('tossup','tieTossup');
       ensure(command.windowId===s.windowId,'This buzzer window has closed.',409);
