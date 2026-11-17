@@ -546,3 +546,67 @@ body:has(.audience-container){background:#070b20}
  .brand-title{font-size:1.12rem}
  .brand-live{font-size:.53rem}
 }
+
+/* Small recovery panel: the host PIN no longer expands across the entire show. */
+.claim-panel{
+  max-width:570px;width:100%;margin:0 0 19px;padding:18px 20px;
+  display:flex;flex-direction:column;gap:12px;
+  border-color:#7168a5;
+}
+.claim-heading{display:flex;align-items:flex-start;gap:12px;min-width:0}
+.claim-heading>svg{color:#ffdb8b;flex-shrink:0;margin-top:4px}
+.claim-heading h2{font-size:1.35rem;margin:0 0 4px}
+.claim-heading p{font-size:.84rem;line-height:1.55;margin:0}
+.claim-form{display:flex;flex-direction:column;gap:6px;min-width:0}
+.claim-form label{font-size:.72rem;letter-spacing:.04em;font-weight:800}
+.claim-form-row{display:flex;align-items:center;gap:10px;min-width:0}
+.claim-form-row input{width:170px;min-width:0;flex:0 1 170px;min-height:42px}
+.claim-form-row .button{min-height:42px;white-space:nowrap}
+
+/* Session controls have independent, comfortably separated touch targets. */
+.host-tools{min-width:0}
+.host-tools .host-action-stack{display:flex;flex-direction:column;gap:10px;margin-top:14px}
+.host-action-stack>.button{display:flex;align-items:center;justify-content:center;gap:9px;min-height:44px}
+.host-action-stack .display-access--sidebar{
+  margin-top:0;width:100%;display:grid;grid-template-columns:minmax(0,1fr) 40px;
+  gap:8px;align-items:start;justify-content:stretch;
+}
+.host-action-stack .display-access--sidebar>.button{width:100%;min-width:0;min-height:44px}
+.host-action-stack .display-options>summary{height:44px;width:40px}
+.host-action-stack .display-access-error{grid-column:1/-1}
+.host-end-game{
+  margin-top:4px;color:#ffd3dd;
+  background:#3a2549;border:1px solid #9e5c81;
+  box-shadow:none;font-weight:800;
+}
+.host-end-game:hover:not(:disabled){color:white;background:#583358;border-color:#c47c9a}
+.spin-progress{
+  display:flex;align-items:center;justify-content:center;gap:9px;
+  padding:12px 11px;margin-top:6px;background:#203162;
+  border:1px solid #5e72ac;border-radius:12px;
+  color:#ffe4a4;font-size:.87rem;font-weight:800;text-align:center;
+}
+.spin-progress svg{animation:spin-feedback 1.3s linear infinite}
+@keyframes spin-feedback{to{transform:rotate(360deg)}}
+
+/* Canvas stays on top of the scene without ever consuming a layout row.
+   This prevents the initial confetti-only blank gap on champion reveal. */
+.results-confetti{
+  position:fixed;inset:0;display:block;
+  width:100vw;height:100dvh;z-index:100;
+  pointer-events:none;contain:strict;
+}
+.celebration{position:relative;isolation:isolate;min-height:385px}
+.celebration .standings{position:relative}
+@media(max-width:540px){
+  .claim-panel{padding:15px;max-width:100%}
+  .claim-heading h2{font-size:1.2rem}
+  .claim-form-row{flex-wrap:wrap}
+  .claim-form-row input{flex:1 1 120px;width:auto}
+  .claim-form-row .button{flex:1 1 120px}
+  .host-action-stack .display-access--sidebar{grid-template-columns:minmax(0,1fr) 40px}
+  .host-end-game{min-height:45px}
+}
+@media(prefers-reduced-motion:reduce){
+  .spin-progress svg{animation:none}
+}
