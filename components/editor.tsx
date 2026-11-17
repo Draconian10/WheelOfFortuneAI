@@ -13,7 +13,7 @@ export default function Editor({id}:{id:string}){
 }
 function GameEditor({id,owner}:{id:string;owner:string}){
   const router=useRouter();
-  const [game,setGame]=useState<GameDefinition>();
+  const [game,setGame]=useState<GameDefinition|undefined>(undefined);
   const [roundIndex,setRoundIndex]=useState(0),[puzzleIndex,setPuzzleIndex]=useState(0);
   const [editingBonus,setEditingBonus]=useState(false),[editingTie,setEditingTie]=useState(false);
   const [pin,setPin]=useState(''),[busy,setBusy]=useState(false),[status,setStatus]=useState(''),[error,setError]=useState('');

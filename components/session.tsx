@@ -367,7 +367,7 @@ function LiveSession({id,role,displayToken}:{
               End Game</button>}
           </div>}
           {host&&!ended&&<RecoveryRequests sessionId={id} onApproved={refresh}/>}
-          {player&&s.phase!=='lobby'&&<div className="panel player-instruction">
+          {player&&<div className="panel player-instruction">
             <div className="eyebrow">HOW TO PLAY</div>
             <p>Spin, call letters, buy vowels, and solve on your turn. Your round money becomes secure only when you solve the puzzle.</p>
             <p className="muted tiny">A Bankrupt only removes the applicable unbanked round money.</p>
