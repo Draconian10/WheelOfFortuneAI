@@ -5,7 +5,7 @@ import {useRouter} from 'next/navigation';
 import {ArrowLeft,Save,Eye,Plus,Trash2,FileJson,Check,Copy,RefreshCw} from 'lucide-react';
 import {HostAuth} from './auth';
 import {api} from '@/lib/client';
-import {gameSchema,playable} from '@/lib/game/schema';
+import {gameSchema,playable,roundPuzzleLimits} from '@/lib/game/schema';
 import {emptyGame,starterGame} from '@/lib/game/starter';
 import {gameToPortableJson,parsePortableGameJson,MAX_GAME_JSON_LENGTH} from '@/lib/game/portable-json';
 import type {GameDefinition,Puzzle} from '@/lib/game/types';
@@ -101,6 +101,7 @@ function GameEditor({id,owner}:{id:string;owner:string}){
     update({...game,rounds:game.rounds.map((r,i)=>i===index?{...r,...patch}:r)});
   };
   const round=game.rounds[roundIndex];
+  const puzzleLimits=roundPuzzleLimits(round.kind,game.opening);
   const selected=editingTie?game.tiebreaker:editingBonus?game.bonus.puzzles[puzzleIndex]:round.puzzles[puzzleIndex];
   const editPuzzle=(p:Puzzle)=>{
     if(editingTie)update({...game,tiebreaker:p});
@@ -176,17 +177,26 @@ function GameEditor({id,owner}:{id:string;owner:string}){
               {p.answer&&<Check size={16}/>}
             </button>)}
         </div>
-        {!editingBonus&&!editingTie&&<div className="button-row">
-          <button className="button secondary" disabled={round.puzzles.length>=12} onClick={()=>{
+        {!editingBonus&&!editingTie&&<>
+          <div className="button-row">
+          <button className="button secondary" disabled={round.puzzles.length>=puzzleLimits.max} onClick={()=>{
             const p={id:crypto.randomUUID(),category:'',answer:'',hint:''};
             editRound(roundIndex,{puzzles:[...round.puzzles,p]});setPuzzleIndex(round.puzzles.length);
           }}><Plus size={16}/> Add puzzle</button>
-          <button className="icon-button" title="Remove current puzzle" disabled={round.puzzles.length<=1}
+          <button className="icon-button" title="Remove current puzzle" disabled={round.puzzles.length<=puzzleLimits.min}
             onClick={()=>{
               if(!confirm('Remove the selected puzzle?'))return;
               editRound(roundIndex,{puzzles:round.puzzles.filter((_,i)=>i!==puzzleIndex)});
               setPuzzleIndex(Math.max(0,puzzleIndex-1));
-            }}><Trash2 size={17}/></button></div>}
+            }}><Trash2 size={17}/></button></div>
+          <p className="muted tiny">{round.kind==='tossup'
+            ?'Opening Toss-Ups: '+puzzleLimits.min+'–'+puzzleLimits.max+' puzzles.'
+            :round.kind==='triple'
+              ?'Triple Toss-Up: exactly three puzzles.'
+              :'Wheel-spinning rounds: exactly one puzzle.'}
+            {round.puzzles.length>puzzleLimits.max?' Remove extra puzzles before saving or starting.':''}
+          </p>
+        </>}
         {round.kind==='prize'&&!editingBonus&&!editingTie&&<div className="prize-config">
           <h3>Prize Puzzle Award</h3>
           <label>Prize name<input value={round.prize?.label??''}
