@@ -190,11 +190,18 @@ test('complete 5-contestant browser game: join, live buzz, host control, rounds,
     await expect(contestants[4].locator('.personal-score')).toBeVisible();
     note('Pause, resume and refresh preserve every player score and seat');
     for(let round=1;round<=3;round++){
-      const phase=await host.locator('main[data-game-phase]').getAttribute('data-game-phase');
-      expect(phase).toBe('turn');
+      // Clicking Next Round starts an asynchronous command. Reading the phase
+      // immediately races React's state update and sometimes sees roundResult.
+      // Wait for BOTH the expected phase and the distinct stage, not just a
+      // generic "turn" (which is also used by the preceding wheel round).
+      await expect(host.locator('main[data-game-phase="turn"]')).toBeVisible({timeout:15000});
+      await expect(host.getByText('STAGE '+(round+1)+' OF 6')).toBeVisible();
       await host.getByRole('button',{name:/Mark Solution Correct/}).click();
       await expect(host.locator('[data-game-phase="roundResult"]')).toBeVisible();
       await host.getByRole('button',{name:/Next Round/}).click();
+      const nextPhase=round===3?'tossup':'turn';
+      await expect(host.locator('main[data-game-phase="'+nextPhase+'"]')).toBeVisible({timeout:15000});
+      await expect(host.getByText('STAGE '+(round+2)+' OF 6')).toBeVisible();
       note('Regular/Mystery/Prize round '+round+' banked with host-verified spoken solution');
     }
     for(let puzzle=0;puzzle<3;puzzle++){
@@ -204,6 +211,9 @@ test('complete 5-contestant browser game: join, live buzz, host control, rounds,
       await host.getByRole('button',{name:/Correct/}).click();
       await expect(host.locator('[data-game-phase="roundResult"]')).toBeVisible();
       await host.getByRole('button',{name:puzzle===2?/Next Round/:/Next Toss-Up/}).click();
+      await expect(host.locator('main[data-game-phase="'+(puzzle===2?'turn':'tossup')+'"]'))
+        .toBeVisible({timeout:15000});
+      await expect(host.getByText('STAGE '+(puzzle===2?6:5)+' OF 6')).toBeVisible();
     }
     note('Triple Toss-Up sweep with banked winnings and three independent question reveals');
     await expect(host.locator('[data-game-phase="turn"]')).toBeVisible();
