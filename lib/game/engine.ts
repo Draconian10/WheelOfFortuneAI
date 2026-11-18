@@ -232,6 +232,18 @@ function settleSpin(s:GameState){
   }
   recordAction(s,resolvedAt,'wheelResult',s.lastAction??'Wheel resolved.',undefined,p.id,spin.wedge.label);
 }
+function settleFinalSpin(s:GameState){
+  if(s.phase!=='finalSpinning'||!s.spin||s.spinEndsAt===undefined)return;
+  const settledAt=s.spinEndsAt;
+  s.spinEndsAt=undefined;
+  s.speedupValue=s.spin.wedge.value+1000;
+  s.phase='speedup';
+  s.speedupCanSolve=false;
+  s.pendingSpin=undefined;
+  s.deadline=undefined;s.remaining=undefined;
+  s.lastAction='FINAL SPIN! Consonants are worth $'+s.speedupValue+' each. Speed-Up begins!';
+  recordAction(s,settledAt,'finalSpinResult',s.lastAction,undefined,s.currentPlayerId,s.spin.wedge.label);
+}
 function revealAutomatically(s:GameState,now:number){
   if(!['tossup','tieTossup'].includes(s.phase)||s.puzzleStartedAt===undefined)return;
   const puzzle=currentPuzzle(s);
@@ -256,6 +268,8 @@ export function reconcile(s:GameState,now:number){
   const boundary=s.hostSeen+HOST_GRACE_MS,at=Math.min(now,boundary);
   if(s.phase==='spinning'&&s.spinEndsAt!==undefined&&at>=s.spinEndsAt)
     settleSpin(s);
+  if(s.phase==='finalSpinning'&&s.spinEndsAt!==undefined&&at>=s.spinEndsAt)
+    settleFinalSpin(s);
   if(s.deadline!==undefined&&s.deadline<=at){
     const expiry=s.deadline;
     const ctx:Context={userId:s.hostId,actionId:'timeout:'+s.version+':'+expiry,expectedVersion:s.actionVersion,now:expiry};
@@ -568,12 +582,16 @@ export function applyCommand(original:GameState,command:Command,ctx:Context):Gam
     }
     case 'speedUp':{
       phase('turn');ensure(currentRound(s)?.kind==='final','Speed-Up belongs to Round 4.');
-      s.wildCardValue=undefined;
-      const available=wheelForRound('final').filter(w=>w.kind==='cash');
-      s.speedupValue=available[random(ctx,available.length)].value+1000;
-      s.pendingSpin=undefined;s.phase='speedup';s.speedupCanSolve=false;
+      const wheel=wheelForRound('final');
+      const available=wheel.map((w,index)=>({w,index})).filter(({w})=>w.kind==='cash');
+      const selected=available[random(ctx,available.length)];
+      s.wildCardValue=undefined;s.speedupValue=undefined;
+      s.spin={id:crypto.randomUUID(),index:selected.index,wedge:selected.w,
+        playerId:s.currentPlayerId!,sequence:(s.spin?.sequence??0)+1,startedAt:ctx.now};
+      s.spinEndsAt=ctx.now+SPIN_DURATION_MS;
+      s.pendingSpin=undefined;s.phase='finalSpinning';s.speedupCanSolve=false;
       s.deadline=undefined;s.remaining=undefined;
-      s.lastAction='Final Spin! Consonants are worth $'+s.speedupValue+' each.';
+      s.lastAction='FINAL SPIN! The wheel is spinning. Speed-Up begins when it stops!';
       break;
     }
     case 'pass':{
