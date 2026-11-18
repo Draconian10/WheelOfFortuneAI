@@ -2,6 +2,7 @@ import type {Metadata} from 'next';
 import SiteHeader from '@/components/site-header';
 import './globals.css';
 import './ui-refresh.css';
+import './broadcast.css';
 export const metadata:Metadata={
   title:'Fortune Live | Spin. Solve. Celebrate.',
   description:'A live multiplayer Wheel of Fortune inspired game for hosts, players and audiences.'
