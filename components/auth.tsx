@@ -2,7 +2,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { User } from '@supabase/supabase-js';
 import { configured, supabase } from '@/lib/client';
-import { hostConfirmationRedirect, hostPasswordRecoveryRedirect } from '@/lib/auth-flow';
 
 export function SetupNotice() {
   return (
@@ -69,10 +68,15 @@ export function HostAuth({ children }: { children: (user: User) => React.ReactNo
     return () => data.subscription.unsubscribe();
   }, [checkUser]);
 
-  const confirmUrl = () =>
-    hostConfirmationRedirect(window.location.origin, process.env.NEXT_PUBLIC_SITE_URL);
-  const resetUrl = () =>
-    hostPasswordRecoveryRedirect(window.location.origin, process.env.NEXT_PUBLIC_SITE_URL);
+  const redirectUrls = async () => {
+    const response = await fetch('/api/auth/redirects', {cache:'no-store'});
+    const data = await response.json() as {
+      confirmation?: string; recovery?: string; error?: string
+    };
+    if (!response.ok || !data.confirmation || !data.recovery)
+      throw new Error(data.error ?? 'Unable to prepare email verification links.');
+    return {confirmation:data.confirmation, recovery:data.recovery};
+  };
 
   if (!configured()) return <SetupNotice />;
   if (loading)
@@ -119,7 +123,7 @@ export function HostAuth({ children }: { children: (user: User) => React.ReactNo
                 const result = await supabase().auth.resend({
                   type: 'signup',
                   email: pendingEmail,
-                  options: { emailRedirectTo: confirmUrl() },
+                  options: { emailRedirectTo: (await redirectUrls()).confirmation },
                 });
                 if (result.error) throw result.error;
               } catch (e) {
@@ -198,7 +202,7 @@ export function HostAuth({ children }: { children: (user: User) => React.ReactNo
                   window.history.replaceState(null, '', '/host');
                 } else if (mode === 'forgot') {
                   const result = await supabase().auth.resetPasswordForEmail(email, {
-                    redirectTo: resetUrl(),
+                    redirectTo: (await redirectUrls()).recovery,
                   });
                   if (result.error) throw result.error;
                   setResetSent(true);
@@ -213,7 +217,7 @@ export function HostAuth({ children }: { children: (user: User) => React.ReactNo
                       : await supabase().auth.signUp({
                           email,
                           password,
-                          options: { emailRedirectTo: confirmUrl() },
+                          options: { emailRedirectTo: (await redirectUrls()).confirmation },
                         });
                   if (result.error) throw result.error;
                   if (mode === 'signup') {

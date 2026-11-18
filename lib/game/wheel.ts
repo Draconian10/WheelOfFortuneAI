@@ -35,7 +35,7 @@ export function wheelForRound(kind: RoundKind): Wedge[] {
   if(['regular','mystery','prize','final'].includes(kind))
     wheel[9]={...wheel[9],kind:'lose',label:'LOSE A TURN',value:0};
   if(kind === 'regular'){
-    wheel[7] = { ...wheel[7], kind:'free', label:'FREE PLAY',value:0 };
+    wheel[7] = { ...wheel[7], kind:'free', label:'FREE PLAY',value:500 };
     wheel[16] = { ...wheel[16], kind:'wild', label:'WILD CARD',value:500 };
   }
   if(kind === 'mystery'){

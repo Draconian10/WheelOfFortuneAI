@@ -27,6 +27,18 @@ It is a separate project built from the architectural patterns of the JeopardyAI
 
 Import THIS repository as a Next.js project. Add the same environment variables to Vercel. Supabase persists all gameplay and authoring data. No Vercel cron or custom WebSocket server is required.
 
+### Email confirmation and password recovery (public URL)
+
+Host sign-up uses the same Supabase email-confirmation and password-reset flow as JeopardyAI. **Confirmation links must return to a public production URL, not a protected Vercel preview.**
+
+1. In Vercel, make sure the production domain is available to guests. Under **Project → Settings → Deployment Protection**, use **Standard Protection** (protects previews, not production domains) or your preferred setting that allows public access to the production domain. If **All Deployments** are protected, recipients will still see Vercel's request-access screen.
+2. Set `NEXT_PUBLIC_SITE_URL=https://YOUR_PUBLIC_GAME_DOMAIN` in Vercel's environment settings. Alternatively, enable **System Environment Variables** so the server can use `VERCEL_PROJECT_PRODUCTION_URL`; on Vercel this canonical production hostname takes priority over preview URLs. Redeploy after changing settings.
+3. In **Supabase → Authentication → URL Configuration**, set **Site URL** to `https://YOUR_PUBLIC_GAME_DOMAIN` and allow the corresponding `/host?confirmed=1` and `/host?reset=1` return URLs. Keep `http://localhost:3000/host**` for local testing if desired.
+4. If your Supabase email templates were customized, check that signup and password reset links use `{{ .ConfirmationURL }}` (not `{{ .SiteURL }}`) so Supabase can honor the requested redirect URL.
+5. Test with a **freshly sent** confirmation email. Links already sent before the correction can still point to an inaccessible preview; use **Resend confirmation email**.
+
+The app's `/api/auth/redirects` endpoint returns only public redirect URLs, with cache disabled. It refuses to generate Vercel-hosted email links if no public domain can be determined. Local development continues to use its localhost origin.
+
 NEVER expose the SUPABASE_SERVICE_ROLE_KEY to a browser. All client requests use short-lived Supabase JWTs, validated by the server. Broadcasts contain only version notifications, and the role-specific snapshot API omits unrevealed solutions.
 
 ## Test

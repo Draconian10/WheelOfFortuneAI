@@ -810,3 +810,50 @@ describe('session action journal is private and reflects the correct puzzle',()=
     expect(s.events[0].puzzleIndex).toBe(0);
   });
 });
+
+describe('server-enforced host control for gameplay commands',()=>{
+  it('only permits the controlling host to start the Bonus Round',()=>{
+    let s=regular();s.phase='bonusSpin';s.bonusPlayerId=PLAYERS[0];
+    s=send(s,{type:'spinBonus'},PLAYERS[0],0);
+    s=send(s,{type:'chooseBonus',index:0},PLAYERS[0]);
+    for(const letter of ['B','C','D','A'])s=send(s,{type:'bonusLetter',letter},PLAYERS[0]);
+    expect(()=>send(s,{type:'startBonus'},PLAYERS[0])).toThrow('Only the host');
+    expect(()=>applyCommand(s,{type:'startBonus'},{
+      ...ctx(s),controller:'00000000-0000-4000-8000-000000000099'
+    })).toThrow('read-only');
+    s=send(s,{type:'startBonus'});
+    expect(s.phase).toBe('bonusTimer');
+  });
+  it('blocks a stale host tab from spinning, choosing letters, or buying vowels',()=>{
+    const s=regular();s.players[0].roundMoney=500;
+    const stale={...ctx(s),controller:'00000000-0000-4000-8000-000000000099'};
+    expect(()=>applyCommand(s,{type:'spin'},stale)).toThrow('read-only');
+    expect(()=>applyCommand(s,{type:'buyVowel'},stale)).toThrow('read-only');
+    expect(()=>send(s,{type:'spin'},PLAYERS[0],0)).not.toThrow();
+    expect(send(s,{type:'spin'},HOST,0).phase).toBe('spinning');
+  });
+});
+
+describe('legacy Free Play wedge scoring',()=>{
+  it('awards $500 per consonant occurrence and keeps a free vowel free',()=>{
+    let s=regular();
+    s=spinAndSettle(s,PLAYERS[0],7);
+    expect(s.pendingSpin?.wedge.kind).toBe('free');
+    expect(s.pendingSpin?.wedge.value).toBe(500);
+    s=send(s,{type:'letter',letter:'T'},PLAYERS[0]);
+    expect(s.players[0].roundMoney).toBe(1500);
+    let vowel=regular();
+    vowel=spinAndSettle(vowel,PLAYERS[0],7);
+    vowel=send(vowel,{type:'letter',letter:'E'},PLAYERS[0]);
+    expect(vowel.players[0].roundMoney).toBe(0);
+    expect(vowel.currentPlayerId).toBe(PLAYERS[0]);
+  });
+  it('does not penalize an absent letter or lose the turn',()=>{
+    let s=regular();
+    s=spinAndSettle(s,PLAYERS[0],7);
+    s=send(s,{type:'letter',letter:'Z'},PLAYERS[0]);
+    expect(s.players[0].roundMoney).toBe(0);
+    expect(s.currentPlayerId).toBe(PLAYERS[0]);
+    expect(s.phase).toBe('turn');
+  });
+});
