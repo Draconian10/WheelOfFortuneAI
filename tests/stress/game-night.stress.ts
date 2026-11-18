@@ -178,6 +178,10 @@ it('complete five-player show: every round, prize, Mystery, Express, Triple Toss
   current=s.currentPlayerId!;
   s=await move(s,{type:'letter',letter:'C'},current);
   expect(s.speedupCanSolve).toBe(true);checks++;
+  expect(s.windowId).toBeDefined();checks++;
+  s=await move(s,{type:'speedupBuzz',windowId:s.windowId!},current);
+  expect(s.phase).toBe('speedupAnswer');checks++;
+  expect(s.deadline).toBeUndefined();checks++;
   s=await move(s,{type:'solve',text:'CHOCOLATE CHIP PANCAKES'},current);
   expect(s.phase).toBe('roundResult');checks++;
   const standings=s.players.map(p=>({id:p.id,total:total(p)}));
