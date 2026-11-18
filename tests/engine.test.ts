@@ -857,3 +857,109 @@ describe('legacy Free Play wedge scoring',()=>{
     expect(s.phase).toBe('turn');
   });
 });
+
+describe('television-style round starting order',()=>{
+  const solveTossup=(state:GameState,player:string)=>{
+    let s=send(state,{type:'buzz',windowId:state.windowId!},player);
+    return send(s,{type:'judgeBuzz',correct:true});
+  };
+  it('uses the last opening winner for Round 1, rotates Rounds 2 and 3, then uses the final Triple winner',()=>{
+    let s=starting();
+    s=solveTossup(s,PLAYERS[0]);s=send(s,{type:'nextRound'});
+    s=solveTossup(s,PLAYERS[2]);s=send(s,{type:'nextRound'});
+    s=solveTossup(s,PLAYERS[1]);s=send(s,{type:'nextRound'});
+    expect(s.roundIndex).toBe(1);
+    expect(s.currentPlayerId).toBe(PLAYERS[1]);
+
+    s=send(s,{type:'hostSolve',playerId:PLAYERS[1]});
+    s=send(s,{type:'nextRound'});
+    expect(s.roundIndex).toBe(2);
+    expect(s.currentPlayerId).toBe(PLAYERS[2]);
+    expect(s.roundStarterId).toBe(PLAYERS[1]);
+
+    s=send(s,{type:'hostSolve',playerId:PLAYERS[2]});
+    s=send(s,{type:'nextRound'});
+    expect(s.roundIndex).toBe(3);
+    expect(s.currentPlayerId).toBe(PLAYERS[0]);
+
+    s=send(s,{type:'hostSolve',playerId:PLAYERS[0]});
+    s=send(s,{type:'nextRound'});
+    expect(s.roundIndex).toBe(4);
+    s=solveTossup(s,PLAYERS[2]);s=send(s,{type:'nextRound'});
+    expect(s.roundStarterId).toBe(PLAYERS[1]); // First two Triple puzzles never control Round 4.
+    s=solveTossup(s,PLAYERS[0]);s=send(s,{type:'nextRound'});
+    s=solveTossup(s,PLAYERS[2]);s=send(s,{type:'nextRound'});
+    expect(s.roundIndex).toBe(5);
+    expect(s.currentPlayerId).toBe(PLAYERS[2]);
+  });
+  it('uses the second traditional Toss-Up winner for Round 1',()=>{
+    const def=starterGame();def.opening='traditional';
+    def.rounds[0].puzzles=def.rounds[0].puzzles.slice(0,2);
+    let s=newSession(def,'game',HOST,'123456',START,CONTROLLER);
+    for(let i=0;i<3;i++)s=send(s,{type:'join',name:'Player'+i},PLAYERS[i]);
+    s=send(s,{type:'start'});
+    s=solveTossup(s,PLAYERS[0]);s=send(s,{type:'nextRound'});
+    s=solveTossup(s,PLAYERS[2]);s=send(s,{type:'nextRound'});
+    expect(s.roundIndex).toBe(1);
+    expect(s.currentPlayerId).toBe(PLAYERS[2]);
+  });
+  it('retains Round 1 starter as a fallback when the third Triple Toss-Up is unsolved',()=>{
+    const s=regular();
+    s.roundIndex=4;s.puzzleIndex=2;s.phase='roundResult';
+    s.roundStarterId=PLAYERS[0];
+    s.tripleWinners=[PLAYERS[1],PLAYERS[2]];
+    const next=send(s,{type:'nextRound'});
+    expect(next.roundIndex).toBe(5);
+    expect(next.currentPlayerId).toBe(PLAYERS[0]);
+  });
+  it('wraps the regular-round rotation across all five player seats',()=>{
+    let s=newSession(starterGame(),'game',HOST,'123456',START,CONTROLLER);
+    const ids=[...PLAYERS,...EXTRA_PLAYERS];
+    for(const [i,id] of ids.entries())s=send(s,{type:'join',name:'Seat '+i},id);
+    s=send(s,{type:'start'});
+    s.roundStarterId=ids[4];
+    s.roundIndex=0;s.phase='roundResult';s.puzzleIndex=s.definition.rounds[0].puzzles.length-1;
+    s=send(s,{type:'nextRound'});
+    expect(s.currentPlayerId).toBe(ids[4]);
+    s=send(s,{type:'hostSolve',playerId:ids[4]});s=send(s,{type:'nextRound'});
+    expect(s.currentPlayerId).toBe(ids[0]);
+    s=send(s,{type:'hostSolve',playerId:ids[0]});s=send(s,{type:'nextRound'});
+    expect(s.currentPlayerId).toBe(ids[1]);
+  });
+});
+
+describe('round puzzle-count validation',()=>{
+  it('allows only one puzzle in regular, Mystery, Prize and Final Spin rounds',()=>{
+    for(const index of [1,2,3,5]){
+      const game=starterGame();
+      game.rounds[index].puzzles.push({
+        ...game.rounds[index].puzzles[0],id:crypto.randomUUID()
+      });
+      expect(gameSchema.safeParse(game).success).toBe(false);
+      expect(()=>playable(game)).toThrow('exactly 1 puzzle');
+    }
+  });
+  it('requires exactly three Triple Toss-Up puzzles',()=>{
+    const fewer=starterGame();fewer.rounds[4].puzzles.pop();
+    const extra=starterGame();extra.rounds[4].puzzles.push({
+      ...extra.rounds[4].puzzles[0],id:crypto.randomUUID()
+    });
+    expect(gameSchema.safeParse(fewer).success).toBe(false);
+    expect(gameSchema.safeParse(extra).success).toBe(false);
+    expect(()=>playable(fewer)).toThrow('exactly 3 puzzles');
+    expect(()=>playable(extra)).toThrow('exactly 3 puzzles');
+    expect(gameSchema.parse(starterGame()).rounds[4].puzzles).toHaveLength(3);
+  });
+  it('still allows multiple opening puzzles but requires at least two for traditional Toss-Ups',()=>{
+    const frenzy=starterGame();
+    expect(gameSchema.safeParse(frenzy).success).toBe(true);
+    frenzy.rounds[0].puzzles=frenzy.rounds[0].puzzles.slice(0,1);
+    expect(gameSchema.safeParse(frenzy).success).toBe(true);
+    frenzy.opening='traditional';
+    expect(gameSchema.safeParse(frenzy).success).toBe(false);
+    frenzy.rounds[0].puzzles.push({
+      ...frenzy.rounds[0].puzzles[0],id:crypto.randomUUID()
+    });
+    expect(gameSchema.safeParse(frenzy).success).toBe(true);
+  });
+});
