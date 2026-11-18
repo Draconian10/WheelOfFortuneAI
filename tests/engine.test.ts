@@ -4,6 +4,7 @@ import {playable,gameSchema,commandSchema} from '@/lib/game/schema';
 import {newSession,applyCommand,viewSession,reconcile,total,MIN_PLAYERS,MAX_PLAYERS,activePlayers,SPIN_DURATION_MS,TOSSUP_MS,SPEEDUP_SOLVE_MS} from '@/lib/game/engine';
 import type {GameState,Context} from '@/lib/game/types';
 import type {Command} from '@/lib/game/schema';
+import {bonusWheelWedges,bonusEnvelopeForSlot,wheelForRound} from '@/lib/game/wheel';
 const HOST='00000000-0000-4000-8000-000000000001';
 const PLAYERS=['00000000-0000-4000-8000-000000000002','00000000-0000-4000-8000-000000000003','00000000-0000-4000-8000-000000000004'];
 const CONTROLLER='00000000-0000-4000-8000-000000000005';
@@ -1070,5 +1071,103 @@ describe('host scoreboard and letter adjudication corrections',()=>{
     s=send(s,{type:'spin'},PLAYERS[0]);
     expect(viewSession(s,HOST,s.updatedAt,CONTROLLER).canUndoLetter).toBe(false);
     expect(()=>send(s,{type:'undoLetter'})).toThrow('most recent letter');
+  });
+});
+
+describe('predetermined Mystery Wedge outcomes',()=>{
+  function mystery(startWinner=1){
+    let s=regular();
+    s.phase='roundResult';s.hostSeen=START+150000;
+    s=send(s,{type:'nextRound'},HOST,startWinner);
+    expect(s.roundIndex).toBe(2);
+    expect(s.mysteryPrizeIndex).toBe(startWinner===0?5:19);
+    return s;
+  }
+  it('assigns outcomes once at the start and keeps both unrevealed choices private',()=>{
+    let s=mystery(1);
+    expect(s.mysteryReveals).toEqual([]);
+    const other=viewSession(s,PLAYERS[0],s.updatedAt);
+    const audience=viewSession(s,HOST,s.updatedAt,undefined,true);
+    expect('mysteryPrizeIndex' in other).toBe(false);
+    expect('mysteryPrizeIndex' in audience).toBe(false);
+    expect(audience.mysteryReveals).toEqual([]);
+    expect(wheelForRound('mystery',s.mysteryReveals)[5].kind).toBe('mystery');
+    expect(wheelForRound('mystery',s.mysteryReveals)[19].kind).toBe('mystery');
+
+    const active=s.currentPlayerId!;
+    s=spinAndSettle(s,active,5);
+    s=send(s,{type:'letter',letter:'N'},active);
+    expect(s.phase).toBe('mysteryChoice');
+    // An ignored Mystery offer leaves its hidden face in the same position.
+    s=send(s,{type:'mystery',reveal:false},active);
+    expect(s.mysteryPrizeIndex).toBe(19);
+    expect(s.mysteryReveals).toEqual([]);
+    s=spinAndSettle(s,active,5);
+    s=send(s,{type:'letter',letter:'D'},active);
+    s=send(s,{type:'mystery',reveal:true},active);
+    expect(s.mysteryReveals).toEqual([{index:5,outcome:'bankrupt'}]);
+    expect(wheelForRound('mystery',s.mysteryReveals)[5].kind).toBe('bankrupt');
+    expect(wheelForRound('mystery',s.mysteryReveals)[19].kind).toBe('mystery');
+    expect(viewSession(s,HOST,s.updatedAt,undefined,true).mysteryReveals)
+      .toEqual([{index:5,outcome:'bankrupt'}]);
+    expect(s.mysteryPrizeIndex).toBe(19);
+    const next=s.currentPlayerId!;
+    s=spinAndSettle(s,next,5);
+    expect(s.currentPlayerId).not.toBe(next); // Exposed Bankrupt stays Bankrupt.
+  });
+  it('marks the $10,000 side as collected and does not let a second landing award it again',()=>{
+    let s=mystery(0);
+    const active=s.currentPlayerId!;
+    s=spinAndSettle(s,active,5);
+    s=send(s,{type:'letter',letter:'N'},active);
+    s=send(s,{type:'mystery',reveal:true},active);
+    expect(s.mysteryReveals).toEqual([{index:5,outcome:'prize'}]);
+    expect(s.players.find(p=>p.id===active)?.pendingPrizes).toEqual([{label:'Mystery $10,000',value:10000}]);
+    const updated=wheelForRound('mystery',s.mysteryReveals);
+    expect(updated[5]).toMatchObject({kind:'cash',value:1000});
+    expect(updated[19].kind).toBe('mystery');
+    s=spinAndSettle(s,active,5);
+    expect(s.pendingSpin?.wedge.kind).toBe('cash');
+    s=send(s,{type:'letter',letter:'D'},active);
+    expect(s.players.find(p=>p.id===active)?.pendingPrizes).toHaveLength(1);
+  });
+});
+
+describe('physical Bonus Wheel slot-to-prize mapping',()=>{
+  it('has 24 sealed positions and wraps custom envelopes deterministically',()=>{
+    const wheel=bonusWheelWedges();
+    expect(wheel).toHaveLength(24);
+    expect(new Set(wheel.map(w=>w.label)).size).toBe(24);
+    expect(wheel[0].label).toBe('01');
+    expect(wheel[23].label).toBe('24');
+    expect(bonusEnvelopeForSlot(17,5)).toBe(2);
+    expect(bonusEnvelopeForSlot(23,24)).toBe(23);
+    expect(()=>bonusEnvelopeForSlot(24,5)).toThrow();
+  });
+  it('uses exactly the spun envelope, keeps it sealed, and blocks premature category selection',()=>{
+    let s=regular();s.hostSeen=START+150000;
+    s.phase='bonusSpin';s.bonusPlayerId=PLAYERS[0];
+    s=send(s,{type:'spinBonus'},PLAYERS[0],17);
+    expect(s.phase).toBe('bonusSpinning');
+    expect(s.spin?.index).toBe(17);
+    expect(s.spin?.wedge.label).toBe('18');
+    expect(s.bonusEnvelopeIndex).toBe(2);
+    expect(s.spinEndsAt!-s.spin!.startedAt!).toBe(SPIN_DURATION_MS);
+    expect(viewSession(s,PLAYERS[0],s.updatedAt).bonusPrize).toBeUndefined();
+    expect(()=>send(s,{type:'chooseBonus',index:0},PLAYERS[0])).toThrow();
+    expect(()=>send(s,{type:'spinBonus'},PLAYERS[0])).toThrow();
+    const at=s.spinEndsAt!;
+    reconcile(s,at-1);
+    expect(s.phase).toBe('bonusSpinning');
+    reconcile(s,at);
+    expect(s.phase).toBe('bonusCategory');
+    expect(s.history?.at(-1)?.action).toBe('bonusWheelResult');
+    s=send(s,{type:'chooseBonus',index:0},PLAYERS[0],0,at+10);
+    for(const l of ['B','C','D','A'])s=send(s,{type:'bonusLetter',letter:l},PLAYERS[0],0,at+20);
+    s=send(s,{type:'startBonus'},HOST,0,at+30);
+    s=send(s,{type:'bonusJudge',correct:true},HOST,0,at+40);
+    expect(s.bonusWon).toBe(true);
+    expect(s.players[0].prizes.at(-1)?.value).toBe(50000);
+    expect(viewSession(s,PLAYERS[1],s.updatedAt).bonusPrize?.value).toBe(50000);
   });
 });
