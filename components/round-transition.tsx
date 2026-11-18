@@ -1,5 +1,5 @@
 'use client';
-import {useEffect,useRef,useState} from 'react';
+import {useLayoutEffect,useRef,useState} from 'react';
 import {Sparkles} from 'lucide-react';
 import type {SessionView} from '@/lib/game/types';
 
@@ -26,7 +26,7 @@ export default function RoundTransition({s}:{s:SessionView}){
   const next=cueFor(s);
   const prior=useRef<string|undefined>(undefined);
   const [active,setActive]=useState<Cue|undefined>();
-  useEffect(()=>{
+  useLayoutEffect(()=>{
     const id=next?.key??s.phase;
     if(prior.current===undefined){prior.current=id;return;}
     if(prior.current===id)return;
