@@ -23,6 +23,7 @@ import RecoveryRequests from './recovery-requests';
 import DisplayAccess from './display-access';
 import ResultsConfetti from './results-confetti';
 import HostAnswer from './host-answer';
+import BonusReveal from './bonus-reveal';
 import WedgeHelp from './wedge-help';
 
 const VOWELS='AEIOU';
@@ -243,7 +244,7 @@ function LiveSession({id,role,displayToken}:{
             {isTossup&&clock}</div>
           {!['bonusCategory','bonusSpin'].includes(s.phase)&&<PuzzleBoard s={s}/>}
           {s.lastAction&&<div className="action-ticker" role="status" aria-live="polite">
-            <span className="action-ticker-icon"><Star size={19} aria-hidden="true"/></span>
+            <span className="action-ticker-icon"><Star size={23} aria-hidden="true"/></span>
             <div><span className="action-ticker-label">LIVE GAME UPDATE</span>
               <strong>{spinPendingVisual?(active?.name??'The contestant')+' is spinning the wheel…':s.lastAction}</strong>
             </div>
@@ -266,7 +267,8 @@ function LiveSession({id,role,displayToken}:{
               <>
                 <h2>{respondent?.name} buzzed in first!</h2>
                 <p className="muted">Please give your full solution aloud. The host judges the response.</p>
-                {host&&s.puzzle.answer&&<HostAnswer answer={s.puzzle.answer} hint={s.puzzle.hint}/>}
+                {host&&s.puzzle.answer&&<HostAnswer
+                  key={s.roundIndex+':'+s.puzzleIndex+':buzz'} answer={s.puzzle.answer} hint={s.puzzle.hint}/>}
                 {control&&<div className="button-row centered">
                   <button className="button success" onClick={()=>doSend({type:'judgeBuzz',correct:true})} disabled={busy||s.paused}>
                     <Check size={18}/> Correct</button>
@@ -298,8 +300,12 @@ function LiveSession({id,role,displayToken}:{
                   <Star size={18}/> Use Wild Card · Extra consonant at {money(s.wildCardValue)} each
                 </button>}
                 {solveButton}
-                {control&&s.roundKind==='final'&&<button className="button secondary full"
-                  onClick={()=>doSend({type:'speedUp'})}><Timer size={16}/> Start Final Spin</button>}
+                {control&&s.roundKind==='final'&&<div className="final-spin-control">
+                  <button className="button secondary full" disabled={!canAct}
+                    title="Host calls the final spin: lock the wheel value and begin Speed-Up play."
+                    onClick={()=>doSend({type:'speedUp'})}><Timer size={16}/> Start Final Spin</button>
+                  <p>Host-controlled Speed-Up: locks one consonant value and ends regular spinning.</p>
+                </div>}
               </div>}
               {s.phase==='letter'&&!spinPendingVisual&&<>
                 <h3>{s.pendingSpin?.wedge.kind==='free'?'Free Play — choose any letter':
@@ -340,19 +346,20 @@ function LiveSession({id,role,displayToken}:{
                   onClick={()=>doSend({type:'pass'})}>Pass turn <ArrowRight size={16}/></button>}
               </>}
               {solutionForm}
-              {host&&s.puzzle.answer&&s.phase!=='spinning'&&<HostAnswer answer={s.puzzle.answer} hint={s.puzzle.hint}/>}
+              {host&&s.puzzle.answer&&s.phase!=='spinning'&&<HostAnswer
+                key={s.roundIndex+':'+s.puzzleIndex} answer={s.puzzle.answer} hint={s.puzzle.hint}/>}
               {control&&['turn','letter','express','speedup'].includes(s.phase)&&
                 (s.phase!=='speedup'||(s.speedupCanSolve&&remaining>0))&&
                 <div className="host-oral">
-                <button className="text-button" onClick={()=>{
-                  // A confirmation popup consumes the entire three-second
-                  // Speed-Up interval; the host must be able to award a spoken
-                  // solution immediately while the contestant's window is open.
-                  if(active&&(s.phase==='speedup'||confirm('Confirm '+active.name+' solved the puzzle correctly aloud?')))
-                    doSend({type:'hostSolve',playerId:active.id});
-                }}>Mark spoken solution correct</button>
+                <button className="button primary full host-solve-button"
+                  disabled={!canAct||(s.phase==='speedup'&&remaining<=0)}
+                  onClick={()=>{
+                    // A confirmation popup would consume the three-second
+                    // Speed-Up solve window; retain confirmation elsewhere.
+                    if(active&&(s.phase==='speedup'||confirm('Confirm '+active.name+' solved the puzzle correctly aloud?')))
+                      doSend({type:'hostSolve',playerId:active.id});
+                  }}><Check size={19} strokeWidth={2.6} aria-hidden="true"/> Mark Solution Correct</button>
               </div>}
-              {!canAct&&!spinPendingVisual&&s.phase!=='spinning'&&<p className="muted tiny">Only the current contestant and controlling host can take actions.</p>}
             </section>
           </div>}
           {s.phase==='roundResult'&&<section className="panel round-complete">
@@ -409,7 +416,9 @@ function LiveSession({id,role,displayToken}:{
           </section>}
           {s.phase==='bonusTimer'&&<section className="panel bonus-stage">
             <div className="eyebrow">TEN SECONDS TO FORTUNE</div><h2>It's all on this puzzle.</h2>{clock}
-            {host&&s.puzzle.answer&&<HostAnswer answer={s.puzzle.answer} hint={s.puzzle.hint}/>} 
+            {host&&s.puzzle.answer&&<HostAnswer key={'bonus:'+s.bonusPuzzleIndex}
+              answer={s.puzzle.answer} hint={s.puzzle.hint}/>}
+
             {player&&userId===s.bonusPlayerId&&<form className="solve-form" onSubmit={e=>{
               e.preventDefault();doSend({type:'bonusSolve',text:solve});
             }}><label>Your final solution<input autoFocus required maxLength={180} value={solve}
@@ -419,16 +428,11 @@ function LiveSession({id,role,displayToken}:{
               <button className="button success" disabled={busy||remaining<=0} onClick={()=>doSend({type:'bonusJudge',correct:true})}>Correct</button>
               <button className="button danger" disabled={busy||remaining<=0} onClick={()=>doSend({type:'bonusJudge',correct:false})}>Incorrect</button></div>}
           </section>}
-          {s.phase==='bonusResult'&&<section className="panel bonus-stage bonus-reveal">
-            <div className="celebration-icon"><Gift size={40}/></div>
-            <div className="eyebrow">THE ENVELOPE REVEAL</div>
-            <h2>{s.bonusWon?'INCREDIBLE SOLVE!':'THE FINAL REVEAL'}</h2>
-            <p className="muted">{finalist?.name} {s.bonusWon?'wins':'had a chance at'}…</p>
-            <div className="bonus-prize">{s.bonusPrize?.label??'Prize'}</div>
-            <p className="muted">{s.bonusWon?'Added to the final total.':'The envelope is revealed, but the prize is not awarded.'}</p>
-            {control&&<button className="button primary" disabled={busy} onClick={()=>doSend({type:'finish'})}>
-              <Trophy size={18}/> Announce the Champion</button>}
-          </section>}
+          {s.phase==='bonusResult'&&<BonusReveal
+            won={!!s.bonusWon} prize={s.bonusPrize} finalist={finalist}
+            control={control} busy={busy} paused={s.paused}
+            onFinish={()=>doSend({type:'finish'})}/>}
+
         </div>
         <aside className="game-sidebar">
           {player&&me&&<div className="panel personal-score">

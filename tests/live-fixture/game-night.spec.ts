@@ -146,7 +146,14 @@ test('complete 5-contestant browser game: join, live buzz, host control, rounds,
     await contestants[0].locator('button.buzzer.ready').click();
     await expect(contestants[0].locator('[data-game-phase="tossupAnswer"]')).toBeVisible();
     await host.reload();
-    await expect(host.getByLabel('Private Correct Response')).toContainText('LET THE GOOD TIMES ROLL');
+    const privateResponse=host.getByLabel('Private Correct Response');
+    await expect(privateResponse).toBeVisible();
+    await expect(privateResponse).not.toHaveAttribute('open','');
+    await expect(privateResponse.locator('.host-private-answer-content')).toBeHidden();
+    await privateResponse.locator('summary').click();
+    await expect(privateResponse).toHaveAttribute('open','');
+    await expect(privateResponse.locator('.host-private-answer-response')).toBeVisible();
+    await expect(privateResponse).toContainText('LET THE GOOD TIMES ROLL');
     await expect(host.locator('.action-ticker')).toContainText('LIVE GAME UPDATE');
     await expect(host.getByText('STAGE 1 OF 6')).toBeVisible();
     await expect(host.getByRole('button',{name:'Correct',exact:true})).not.toContainText('(C)');
@@ -170,6 +177,9 @@ test('complete 5-contestant browser game: join, live buzz, host control, rounds,
       await host.getByRole('button',{name:index===2?/Next Round/:/Next Frenzy Puzzle/}).click();
     }
     await expect(host.locator('[data-game-phase="turn"]')).toBeVisible();
+    await expect(host.locator('details.host-private-answer')).not.toHaveAttribute('open','');
+    await expect(host.getByRole('button',{name:'Mark Solution Correct'})).toBeVisible();
+    await expect(host.getByText('Only the current contestant and controlling host can take actions.')).toHaveCount(0);
     note('Entire Fortune Frenzy completed with standings between all three puzzles');
     // Pause and resume, including the golden Continue icon.
     await host.getByRole('button',{name:/Pause Show/}).click();
@@ -182,7 +192,7 @@ test('complete 5-contestant browser game: join, live buzz, host control, rounds,
     for(let round=1;round<=3;round++){
       const phase=await host.locator('main[data-game-phase]').getAttribute('data-game-phase');
       expect(phase).toBe('turn');
-      await host.getByRole('button',{name:/Mark spoken solution correct/}).click();
+      await host.getByRole('button',{name:/Mark Solution Correct/}).click();
       await expect(host.locator('[data-game-phase="roundResult"]')).toBeVisible();
       await host.getByRole('button',{name:/Next Round/}).click();
       note('Regular/Mystery/Prize round '+round+' banked with host-verified spoken solution');
@@ -197,7 +207,7 @@ test('complete 5-contestant browser game: join, live buzz, host control, rounds,
     }
     note('Triple Toss-Up sweep with banked winnings and three independent question reveals');
     await expect(host.locator('[data-game-phase="turn"]')).toBeVisible();
-    await host.getByRole('button',{name:/Mark spoken solution correct/}).click();
+    await host.getByRole('button',{name:/Mark Solution Correct/}).click();
     await expect(host.locator('[data-game-phase="roundResult"]')).toBeVisible();
     await host.getByRole('button',{name:/See our finalist/}).click();
     await expect(host.locator('[data-game-phase="bonusSpin"]')).toBeVisible();
@@ -213,6 +223,9 @@ test('complete 5-contestant browser game: join, live buzz, host control, rounds,
     await expect(host.locator('[data-game-phase="bonusTimer"]')).toBeVisible();
     await host.getByRole('button',{name:'Correct',exact:true}).click();
     await expect(host.locator('[data-game-phase="bonusResult"]')).toBeVisible();
+    await expect(host.getByText('BONUS PUZZLE SOLVED!')).toBeVisible();
+    await expect(host.getByText('PRIZE AWARDED',{exact:true})).toBeVisible();
+    await expect(host.locator('.bonus-result-breakdown')).toContainText('Total secured winnings');
     await host.getByRole('button',{name:/Announce the Champion/}).click();
     await expect(host.locator('[data-game-phase="finished"]')).toBeVisible();
     await expect(host.getByText(/wins!/)).toBeVisible();
