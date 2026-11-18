@@ -223,7 +223,10 @@ test('complete 5-contestant browser game: join, live buzz, host control, rounds,
     await expect(host.locator('[data-game-phase="bonusSpin"]')).toBeVisible();
     note('Round 4 selects the main-game winner');
     await host.getByRole('button',{name:/Spin Bonus Wheel/}).click();
-    await expect(host.locator('[data-game-phase="bonusCategory"]')).toBeVisible();
+    await expect(host.locator('[data-game-phase="bonusSpinning"]')).toBeVisible();
+    await expect(host.locator('.wheel-bonus')).toBeVisible();
+    await expect(host.locator('.bonus-categories')).toHaveCount(0);
+    await expect(host.locator('[data-game-phase="bonusCategory"]')).toBeVisible({timeout:15000});
     await host.locator('.bonus-category').first().click();
     await expect(host.locator('[data-game-phase="bonusLetters"]')).toBeVisible();
     for(const ch of ['B','C','D','A']){
