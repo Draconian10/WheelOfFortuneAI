@@ -538,6 +538,9 @@ describe('Million Dollar Wedge qualification',()=>{
     const secured=s.players[0].banked;
     s=send(s,{type:'nextRound'});
     expect(s.phase).toBe('turn');
+    // Next regular-round starter rotates instead of following the prior solver.
+    expect(s.currentPlayerId).toBe(PLAYERS[2]);
+    s=spinAndSettle(s,PLAYERS[2],8);
     expect(s.currentPlayerId).toBe(PLAYERS[0]);
     s=spinAndSettle(s,PLAYERS[0],8);
     expect(s.players[0].banked).toBe(secured);
