@@ -2,7 +2,7 @@ export type RoundKind = 'tossup' | 'regular' | 'mystery' | 'prize' | 'triple' | 
 export type WedgeKind = 'cash' | 'bankrupt' | 'lose' | 'free' | 'wild' | 'mystery' | 'express' | 'million';
 export type Phase =
   | 'lobby' | 'tossup' | 'tossupAnswer' | 'turn' | 'spinning' | 'letter' | 'wildLetter' | 'mysteryChoice'
-  | 'expressChoice' | 'express' | 'finalSpinning' | 'speedup' | 'roundResult' | 'tieTossup'
+  | 'expressChoice' | 'express' | 'finalSpinning' | 'speedup' | 'speedupAnswer' | 'roundResult' | 'tieTossup'
   | 'tieAnswer' | 'bonusCategory' | 'bonusSpin' | 'bonusSpinning' | 'bonusLetters' | 'bonusTimer'
   | 'bonusResult' | 'finished' | 'ended';
 export interface Puzzle { id: string; category: string; answer: string; hint?: string; }
