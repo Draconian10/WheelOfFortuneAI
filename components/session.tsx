@@ -52,7 +52,7 @@ function LiveSession({id,role,displayToken}:{
   const [sound,setSound]=useState(false);
   const [settledSpinId,setSettledSpinId]=useState('');
   const spinPendingVisual=!!s?.spin?.startedAt&&
-    ['spinning','finalSpinning','turn','letter','wildLetter','mysteryChoice','expressChoice','express','speedup'].includes(s.phase)&&
+    ['spinning','finalSpinning','turn','letter','wildLetter','mysteryChoice','expressChoice','express','speedup','speedupAnswer'].includes(s.phase)&&
     s.spin.id!==settledSpinId;
   const me=s?.players.find(p=>p.id===userId),active=s?.players.find(p=>p.id===s.currentPlayerId);
   const respondent=s?.players.find(p=>p.id===s.respondent);
@@ -61,14 +61,20 @@ function LiveSession({id,role,displayToken}:{
   const wedgeInfo=!!s&&!spinPendingVisual&&s.phase!=='spinning'&&
     (s.pendingSpin?.wedge||(/landed on|hit BANKRUPT|Wild Card collected|Million Dollar Wedge collected/i.test(s.lastAction??'')
       ?s.spin?.wedge:undefined));
+  const canSpeedupBuzz=!!s&&s.phase==='speedup'&&s.speedupCanSolve&&
+    !!s.windowId&&remaining>0&&canAct;
   const canBuzz=!!s&&player&&connected&&!busy&&!s.paused&&
     ['tossup','tieTossup'].includes(s.phase)&&remaining>0&&!!s.windowId&&
     !s.attempted.includes(userId)&&(s.phase!=='tieTossup'||!!s.tieEligible?.includes(userId));
   useEffect(()=>{setJoinUrl(window.location.origin+'/join?code='+(s?.joinCode??''));},[s?.joinCode]);
-  useEffect(()=>{setShowSolve(false);setSolve('');},[s?.phase,s?.roundIndex,s?.puzzleIndex]);
+  useEffect(()=>{setShowSolve(s?.phase==='speedupAnswer');setSolve('');},[s?.phase,s?.roundIndex,s?.puzzleIndex]);
   useEffect(()=>{
     const key=(e:KeyboardEvent)=>{
       if((e.target as HTMLElement).matches('input,textarea,select,button'))return;
+      if((player||control)&&e.code==='Space'&&canSpeedupBuzz&&s?.windowId){
+        e.preventDefault();void send({type:'speedupBuzz',windowId:s.windowId});
+        return;
+      }
       if(player&&e.code==='Space'&&canBuzz&&s?.windowId){
         e.preventDefault();void send({type:'buzz',windowId:s.windowId});
       }
@@ -78,7 +84,7 @@ function LiveSession({id,role,displayToken}:{
       }
     };
     window.addEventListener('keydown',key);return()=>window.removeEventListener('keydown',key);
-  },[player,canBuzz,s?.windowId,control,s?.phase,send]);
+  },[player,canBuzz,canSpeedupBuzz,s?.windowId,control,s?.phase,send]);
   useEffect(()=>{
     if(!sound||!s)return;
     if(['tossupAnswer','tieAnswer','roundResult','bonusResult'].includes(s.phase)){
@@ -92,11 +98,10 @@ function LiveSession({id,role,displayToken}:{
   },[s?.phase,sound]);
   const doSend=(command:Command)=>{void send(command);};
   const isTossup=!!s&&['tossup','tossupAnswer','tieTossup','tieAnswer'].includes(s.phase);
-  const isWheel=!!s&&['spinning','finalSpinning','turn','letter','wildLetter','mysteryChoice','expressChoice','express','speedup'].includes(s.phase);
+  const isWheel=!!s&&['spinning','finalSpinning','turn','letter','wildLetter','mysteryChoice','expressChoice','express','speedup','speedupAnswer'].includes(s.phase);
   const isBonus=!!s&&['bonusCategory','bonusSpin','bonusSpinning','bonusLetters','bonusTimer','bonusResult'].includes(s.phase);
-  const canSolve=!!s&&['turn','express','speedup','letter'].includes(s.phase)&&canAct&&
-    (s.phase!=='letter'||s.pendingSpin?.wedge.kind==='free')&&
-    (s.phase!=='speedup'||(s.speedupCanSolve&&remaining>0));
+  const canSolve=!!s&&['turn','express','speedupAnswer','letter'].includes(s.phase)&&canAct&&
+    (s.phase!=='letter'||s.pendingSpin?.wedge.kind==='free');
   const wheelKind=s&&['regular','mystery','prize','final'].includes(s.roundKind)
     ?s.roundKind as 'regular'|'mystery'|'prize'|'final':'regular';
   const selectedConsonants=s?.bonusLetters.filter(l=>!VOWELS.includes(l)).length??0;
@@ -133,7 +138,7 @@ function LiveSession({id,role,displayToken}:{
     placeholder="Type the complete phrase…" value={solve} onChange={e=>setSolve(e.target.value.toUpperCase())}/></label>
     <div className="button-row"><button className="button primary" disabled={!solve.trim()||busy}><Check size={17}/> Submit Solution</button>
       <button type="button" className="button secondary" onClick={()=>setShowSolve(false)}>Cancel</button></div></form>;
-  const solveButton=canSolve&&<button className="button primary" onClick={()=>setShowSolve(true)}>
+  const solveButton=canSolve&&(!showSolve||s.phase!=='speedupAnswer')&&<button className="button primary" onClick={()=>setShowSolve(true)}>
     <CheckCircle2 size={19}/> Solve Puzzle</button>;
   const resultView=<section className="panel celebration">
     {s.phase==='finished'&&<ResultsConfetti sessionId={id}/>}
@@ -347,27 +352,33 @@ function LiveSession({id,role,displayToken}:{
                 <h3>Final Spin · One letter at a time</h3>
                 {!s.speedupCanSolve?choices(undefined):<>
                   <div className="speedup-solve-clock" role="status" aria-live="off">
-                    <span>Three seconds to solve</span>{clock}
+                    <span>Three seconds to buzz</span>{clock}
                   </div>
-                  <p className="muted">Solve now or let the turn pass automatically when the clock expires.</p>
+                  <p className="muted">Buzz within three seconds to claim your solution attempt. You can then take as long as you need to type the full answer.</p>
+                  {(player||control)&&<button className="button primary full speedup-buzz-button"
+                    disabled={!canSpeedupBuzz} onClick={()=>{
+                      if(navigator.vibrate)navigator.vibrate(35);
+                      if(s.windowId)doSend({type:'speedupBuzz',windowId:s.windowId});
+                    }}><Zap size={20} fill="currentColor"/> {canSpeedupBuzz?'BUZZ TO ANSWER':'WAIT FOR YOUR TURN'}</button>}
                 </>}
+              </>}
+              {s.phase==='speedupAnswer'&&<>
+                <h3>Final Spin · Answer claimed!</h3>
+                <p className="muted">{active?.name} buzzed in on time. The countdown is stopped — take your time entering the full solution. An incorrect answer passes control to the next contestant.</p>
                 {solveButton}
-                {s.speedupCanSolve&&<button className="button secondary full"
-                  disabled={!canAct||remaining<=0}
-                  onClick={()=>doSend({type:'pass'})}>Pass turn <ArrowRight size={16}/></button>}
+                {(control||player&&s.currentPlayerId===userId)&&<button className="button secondary full"
+                  disabled={!canAct} onClick={()=>doSend({type:'pass'})}>Pass without answering <ArrowRight size={16}/></button>}
               </>}
               {solutionForm}
               {host&&s.puzzle.answer&&s.phase!=='spinning'&&<HostAnswer
                 key={s.roundIndex+':'+s.puzzleIndex} answer={s.puzzle.answer} hint={s.puzzle.hint}/>}
-              {control&&['turn','letter','express','speedup'].includes(s.phase)&&
-                (s.phase!=='speedup'||(s.speedupCanSolve&&remaining>0))&&
+              {control&&['turn','letter','express','speedupAnswer'].includes(s.phase)&&
                 <div className="host-oral">
                 <button className="button primary full host-solve-button"
-                  disabled={!canAct||(s.phase==='speedup'&&remaining<=0)}
+                  disabled={!canAct}
                   onClick={()=>{
-                    // A confirmation popup would consume the three-second
-                    // Speed-Up solve window; retain confirmation elsewhere.
-                    if(active&&(s.phase==='speedup'||confirm('Confirm '+active.name+' solved the puzzle correctly aloud?')))
+                    // A valid Speed-Up buzz removes the answer deadline.
+                    if(active&&(s.phase==='speedupAnswer'||confirm('Confirm '+active.name+' solved the puzzle correctly aloud?')))
                       doSend({type:'hostSolve',playerId:active.id});
                   }}><Check size={19} strokeWidth={2.6} aria-hidden="true"/> Mark Solution Correct</button>
               </div>}
