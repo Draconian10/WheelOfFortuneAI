@@ -8,6 +8,8 @@ It is a separate project built from the architectural patterns of the JeopardyAI
 
 - Host registration, saved game library, game PIN, archived games and persistent sessions
 - Editable six-round puzzles, puzzle preview, JSON import/export, three Bonus Round categories and customizable prize envelopes
+- TV-style round starters: last opening Toss-Up/Frenzy winner starts Round 1, then contestants rotate through seat order for Rounds 2 and 3, and the final Triple Toss-Up winner starts Round 4
+- Exactly one puzzle per wheel-spinning round and exactly three Triple Toss-Ups; opening Toss-Ups/Frenzy may contain multiple puzzles (up to 12). Imports and game saves enforce these limits.
 - Six-digit join codes, QR sharing, anonymous player identities and host-approved recovery
 - Live buzzers, host adjudication, server-chosen wheel spins, letter validation and automatic winnings
 - Regular, Mystery, Prize, Triple Toss-Up, Final Spin, tie-breaker and Bonus Round gameplay

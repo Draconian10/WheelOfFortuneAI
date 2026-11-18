@@ -40,6 +40,19 @@ describe('portable ID-free Wheel of Fortune JSON',()=>{
     reverse.rounds.reverse();
     expect(()=>portableJsonToGame(reverse)).toThrow();
   });
+  it('rejects imported games with extra wheel puzzles or an invalid Triple Toss-Up count',()=>{
+    const extraWheel=gameToPortableJson(starterGame());
+    extraWheel.rounds[2].puzzles.push({...extraWheel.rounds[2].puzzles[0]});
+    expect(()=>parsePortableGameJson(JSON.stringify(extraWheel))).toThrow('exactly 1 puzzle');
+
+    const extraTriple=gameToPortableJson(starterGame());
+    extraTriple.rounds[4].puzzles.push({...extraTriple.rounds[4].puzzles[0]});
+    expect(()=>parsePortableGameJson(JSON.stringify(extraTriple))).toThrow('exactly 3 puzzles');
+
+    const missingTriple=gameToPortableJson(starterGame());
+    missingTriple.rounds[4].puzzles.pop();
+    expect(()=>parsePortableGameJson(JSON.stringify(missingTriple))).toThrow('exactly 3 puzzles');
+  });
   it('rejects invalid JSON, unsupported properties, and oversized payloads',()=>{
     expect(()=>parsePortableGameJson('oops')).toThrow('Invalid JSON');
     expect(()=>parsePortableGameJson('   ')).toThrow('Paste');
