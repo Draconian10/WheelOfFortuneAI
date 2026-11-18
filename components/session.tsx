@@ -23,6 +23,7 @@ import RecoveryRequests from './recovery-requests';
 import DisplayAccess from './display-access';
 import ResultsConfetti from './results-confetti';
 import HostAnswer from './host-answer';
+import BonusReveal from './bonus-reveal';
 import WedgeHelp from './wedge-help';
 
 const VOWELS='AEIOU';
@@ -427,32 +428,11 @@ function LiveSession({id,role,displayToken}:{
               <button className="button success" disabled={busy||remaining<=0} onClick={()=>doSend({type:'bonusJudge',correct:true})}>Correct</button>
               <button className="button danger" disabled={busy||remaining<=0} onClick={()=>doSend({type:'bonusJudge',correct:false})}>Incorrect</button></div>}
           </section>}
-          {s.phase==='bonusResult'&&<section className={'panel bonus-stage bonus-reveal '+(s.bonusWon?'bonus-reveal-won':'bonus-reveal-missed')}>
-            <div className="celebration-icon"><Gift size={36}/></div>
-            <div className="eyebrow">BONUS ROUND RESULT</div>
-            <h2>{s.bonusWon?'BONUS PUZZLE SOLVED!':'BONUS PUZZLE NOT SOLVED'}</h2>
-            <p className="bonus-reveal-lead">{s.bonusWon
-              ?(finalist?.name??'The finalist')+' solved the final puzzle and earned the envelope prize.'
-              :(finalist?.name??'The finalist')+' did not solve the final puzzle in time.'}</p>
-            <div className="bonus-envelope-card">
-              <span className="bonus-envelope-label">THE BONUS ENVELOPE CONTAINED</span>
-              <strong className="bonus-envelope-value">{s.bonusPrize?.label??'Mystery Prize'}</strong>
-              <span className={'bonus-award-status '+(s.bonusWon?'is-awarded':'not-awarded')}>
-                {s.bonusWon?'PRIZE AWARDED':'NOT AWARDED'}
-              </span>
-            </div>
-            <div className="bonus-result-breakdown" aria-label="Bonus round winnings summary">
-              <div><span>Main game winnings</span><strong>{money(total(finalist!)-(s.bonusWon?s.bonusPrize?.value??0:0))}</strong></div>
-              <div><span>Bonus awarded</span><strong>{money(s.bonusWon?s.bonusPrize?.value??0:0)}</strong></div>
-              <div className="bonus-result-total"><span>Total secured winnings</span><strong>{money(total(finalist!))}</strong></div>
-            </div>
-            <p className="bonus-reveal-footnote">{s.bonusWon
-              ?'The envelope prize has been added to the finalist’s total.'
-              :'The envelope is revealed for the audience only; no bonus prize is added. Main-game winnings are kept.'}</p>
-            {control&&<button className="button primary bonus-announce-button" disabled={busy||s.paused}
-              onClick={()=>doSend({type:'finish'})}>
-              <Trophy size={18}/> Announce the Champion</button>}
-          </section>}
+          {s.phase==='bonusResult'&&<BonusReveal
+            won={!!s.bonusWon} prize={s.bonusPrize} finalist={finalist}
+            control={control} busy={busy} paused={s.paused}
+            onFinish={()=>doSend({type:'finish'})}/>}
+
         </div>
         <aside className="game-sidebar">
           {player&&me&&<div className="panel personal-score">
