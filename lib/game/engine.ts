@@ -15,7 +15,7 @@ const VOWELS = 'AEIOU';
 const BASE_BONUS = 'RSTLNE';
 const HOST_COMMANDS = new Set([
   'claim','pause','continue','lockLobby','remove','start','nextRound','revealTimedOut',
-  'judgeBuzz','hostSolve','speedUp','bonusJudge','finish','undo','end'
+  'judgeBuzz','hostSolve','speedUp','startBonus','bonusJudge','finish','undo','end'
 ]);
 const FINISHED = new Set(['finished','ended']);
 export class GameError extends Error {
@@ -276,7 +276,11 @@ export function applyCommand(original:GameState,command:Command,ctx:Context):Gam
   const host=ctx.userId===s.hostId;
   const member=activePlayers(s).some(p=>p.id===ctx.userId);
   ensure(host||member||command.type==='join','You are not part of this game.',403);
-  if(HOST_COMMANDS.has(command.type)&&command.type!=='claim')requireController(s,ctx);
+  // Host permissions are enforced for every host-issued gameplay command, not just
+  // buttons listed as host-only. This prevents stale/read-only host tabs from
+  // bypassing controller ownership via spin, letters, or Bonus Round actions.
+  if((HOST_COMMANDS.has(command.type)&&command.type!=='claim')||
+    (host&&!['claim','heartbeat','join','buzz'].includes(command.type)))requireController(s,ctx);
   if(command.type==='claim'){
     ensure(host&&ctx.pinVerified,'Incorrect host PIN.',403);
   }else if(!['join','heartbeat','buzz'].includes(command.type)){
