@@ -96,8 +96,13 @@ function setRound(s:GameState,ctx:Context){
     s.phase='tossup';s.windowId=crypto.randomUUID();s.deadline=ctx.now+TOSSUP_MS;
     s.remaining=TOSSUP_MS;s.puzzleStartedAt=ctx.now;
   }else{
-    s.phase='turn';s.currentPlayerId=players.some(p=>p.id===s.roundStarterId)
-      ? s.roundStarterId : players[random(ctx,players.length)].id;
+    // The last opening Toss-Up winner begins Round 1. The next contestants
+    // in seat order begin Rounds 2 and 3, irrespective of who solved before.
+    // The final Triple Toss-Up winner begins Round 4.
+    const first=players.findIndex(p=>p.id===s.roundStarterId);
+    const base=first>=0?first:random(ctx,players.length);
+    const offset=['regular','mystery','prize'].includes(round.kind)?s.roundIndex-1:0;
+    s.phase='turn';s.currentPlayerId=players[(base+offset)%players.length].id;
   }
 }
 function advanceTossup(s:GameState,ctx:Context){
@@ -122,7 +127,10 @@ function completedTossup(s:GameState,ctx:Context,player:Player){
   const value=round?.kind==='triple'?2000:s.definition.opening==='traditional'
     ?(s.puzzleIndex===0?1000:2000):1000;
   addBanked(s,player,value,ctx,'Solved '+(round?.title??'Toss-Up'));
-  s.roundStarterId=player.id;
+  // Triple Toss-Up 1 and 2 do not determine who starts the Final Spin.
+  // Only the third Triple Toss-Up may change the starter for Round 4.
+  if(round?.kind==='tossup'||(round?.kind==='triple'&&s.puzzleIndex===2))
+    s.roundStarterId=player.id;
   if(round?.kind==='triple'){
     s.tripleWinners.push(player.id);
     if(s.puzzleIndex===2 && s.tripleWinners.length===3 &&
@@ -148,7 +156,6 @@ function bankPuzzle(s:GameState,ctx:Context,p:Player){
   p.prizes.push(...p.pendingPrizes);
   if(p.pendingMillionWedge)p.millionWedge=true;
   if(current?.kind==='prize'&&current.prize)p.prizes.push(structuredClone(current.prize));
-  s.roundStarterId=p.id;
   for(const other of activePlayers(s)){
     other.roundMoney=0;other.pendingPrizes=[];other.pendingMillionWedge=false;
   }
