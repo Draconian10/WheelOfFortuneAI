@@ -16,6 +16,9 @@ It is a separate project built from the architectural patterns of the JeopardyAI
 - Cash separated into unbanked round earnings, secured money and prize value
 - Animated standings, host pause/resume, read-only audience links, and results CSV
 - Server-timed Final Spin animation that selects a real wheel cash wedge, then announces the cash amount plus $1,000 and starts Speed-Up only after the wheel stops
+- Mystery Round determines the hidden $10,000 and Bankrupt wedge positions once on entry; revealed wedges visibly change on the wheel and never reroll or award the mystery prize twice
+- The standalone 24-position numbered Bonus Wheel now lands on an actual sealed prize position before category selection unlocks; custom envelope lists of 1–24 repeat around the 24 slots as needed
+- Cinematic, accessible round title transitions across host, player, and audience screens (including Mystery, Prize, Triple Toss-Up, Final Round, Bonus and sudden death), without delaying gameplay or requiring new database migrations
 - Television-style full-width audience display with puzzle transitions, a large synchronized wheel, and animated score counters
 - Host-only score corrections for secured or current-round money, with mandatory reasons, private history and score ledger entries; a separate Undo Last Letter action reverses only the most recent letter call without restarting the puzzle
 
