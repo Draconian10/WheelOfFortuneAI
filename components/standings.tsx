@@ -2,6 +2,7 @@
 import {useLayoutEffect,useRef} from 'react';
 import {Trophy,TrendingUp,Gift} from 'lucide-react';
 import {money} from '@/lib/client';
+import AnimatedMoney from './animated-money';
 import {total} from '@/lib/game/engine';
 import type {SessionView} from '@/lib/game/types';
 export default function Standings({s,compact=false}:{s:SessionView;compact?:boolean}){
@@ -40,7 +41,7 @@ export default function Standings({s,compact=false}:{s:SessionView;compact?:bool
           <div className="standing-person"><strong>{p.name}</strong>
             <small>{p.roundMoney>0?money(p.roundMoney)+' this round':p.prizes.length?
               p.prizes.length+' prize'+(p.prizes.length>1?'s':''):'Contestant '+(p.seat+1)}</small></div>
-          <div className="standing-money"><strong>{money(total(p))}</strong>
+          <div className="standing-money"><strong><AnimatedMoney value={total(p)}/></strong>
             {last&&['roundResult','bonusResult','finished'].includes(s.phase)&&
               <small className={last.delta>0?'positive':'muted'}>{last.delta>0?'+':''}{money(last.delta)}</small>}</div>
         </div>;
