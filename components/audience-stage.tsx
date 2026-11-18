@@ -10,7 +10,7 @@ import FinalSpinAnnouncement from './final-spin-announcement';
 
 const wheelPhases=new Set([
   'turn','spinning','finalSpinning','letter','wildLetter','mysteryChoice',
-  'expressChoice','express','speedup'
+  'expressChoice','express','speedup','speedupAnswer'
 ]);
 function clockText(ms:number){
   const sec=Math.ceil(Math.max(0,ms)/1000);
@@ -23,7 +23,7 @@ export default function AudienceStage({s,remaining}:{s:SessionView;remaining:num
   const isWheel=wheelPhases.has(s.phase);
   const isBonus=['bonusSpin','bonusSpinning','bonusCategory','bonusLetters','bonusTimer','bonusResult'].includes(s.phase);
   const isTossup=['tossup','tossupAnswer','tieTossup','tieAnswer'].includes(s.phase);
-  const isFinalSpin=s.phase==='finalSpinning'||s.phase==='speedup';
+  const isFinalSpin=s.phase==='finalSpinning'||s.phase==='speedup'||s.phase==='speedupAnswer';
   const pending=!!s.spin?.startedAt&&isWheel&&s.spin.id!==settledId;
   const spinning=s.phase==='finalSpinning'||(s.phase==='speedup'&&pending);
   const kind:RoundKind=['regular','mystery','prize','final'].includes(s.roundKind)
@@ -45,7 +45,7 @@ export default function AudienceStage({s,remaining}:{s:SessionView;remaining:num
         <strong>{s.roundTitle}</strong>
         {s.puzzlesInRound>1&&<small>PUZZLE {s.puzzleIndex+1} / {s.puzzlesInRound}</small>}
       </div>
-      {((isTossup||s.phase==='bonusTimer'||s.phase==='speedup'&&s.speedupCanSolve)&&
+      {((isTossup||s.phase==='bonusTimer'||(s.phase==='speedup'&&s.speedupCanSolve))&&
         <div className={'broadcast-clock '+(remaining<=5000?'urgent':'')}>
           <Timer size={18}/><strong>{clockText(remaining)}</strong></div>)}
     </div>
@@ -64,11 +64,12 @@ export default function AudienceStage({s,remaining}:{s:SessionView;remaining:num
           <PuzzleBoard s={s}/>}
         {isTossup&&respondent&&<p className="broadcast-answer-status">{respondent.name} is answering!</p>}
         {isTossup&&!respondent&&<p className="broadcast-answer-status">Buzz in when you know the puzzle!</p>}
+        {s.phase==='speedupAnswer'&&<p className="broadcast-answer-status">{nowPlaying?.name} buzzed in! Take your time with the full solution.</p>}
         {s.phase==='bonusResult'&&<div className="broadcast-bonus-outcome">
           {s.bonusWon?'BONUS PUZZLE SOLVED!':'BONUS PUZZLE NOT SOLVED'}
           {s.bonusPrize&&<small>Envelope: {s.bonusPrize.label} {s.bonusWon?'· Awarded':'· Not awarded'}</small>}
         </div>}
-        {s.phase==='speedup'&&!spinning&&s.speedupValue!==undefined&&
+        {['speedup','speedupAnswer'].includes(s.phase)&&!spinning&&s.speedupValue!==undefined&&
           <p className="broadcast-speedup-value">{money(s.speedupValue)} PER CONSONANT</p>}
       </div>
       {hasWheel&&<div className="broadcast-wheel-area">
@@ -77,7 +78,8 @@ export default function AudienceStage({s,remaining}:{s:SessionView;remaining:num
         <p>{bonusSpinning?'One numbered envelope determines the prize':
           spinning?'The wheel decides the final cash value':
           isBonus?'The prize envelope stays sealed':
-          s.phase==='speedup'?'One letter at a time':
+          s.phase==='speedupAnswer'?((nowPlaying?.name??'The contestant')+' buzzed in — answering without a countdown'):
+          s.phase==='speedup'?'Three seconds to buzz after a correct letter':
           nowPlaying?nowPlaying.name+' has the wheel':'The wheel is ready'}</p>
       </div>}
     </div>
