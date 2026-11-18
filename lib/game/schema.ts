@@ -1,4 +1,12 @@
 import { z } from 'zod';
+import type {GameDefinition,RoundKind} from './types';
+
+// Keep editor controls, saved games, and imported JSON on the same limits.
+export function roundPuzzleLimits(kind:RoundKind,opening:GameDefinition['opening']){
+  if(kind==='tossup')return {min:opening==='traditional'?2:1,max:12};
+  if(kind==='triple')return {min:3,max:3};
+  return {min:1,max:1};
+}
 export const pinSchema=z.string().regex(/^\d{6}$/,'Enter exactly six digits.');
 const text=(max:number)=>z.string().trim().max(max);
 export const puzzleSchema=z.object({id:z.string().uuid(),category:text(80),answer:text(160),hint:text(300).optional()}).strict();
@@ -15,11 +23,17 @@ export const gameSchema=z.object({
   tiebreaker:puzzleSchema
 }).strict().superRefine((g,ctx)=>{
   const kinds=['tossup','regular','mystery','prize','triple','final'];
-  const minimum=[g.opening==='traditional'?2:1,1,1,1,3,1];
   const ids=new Set<string>();
   for(let i=0;i<g.rounds.length;i++){
     const r=g.rounds[i];
-    if(r.kind!==kinds[i]||r.puzzles.length<minimum[i])ctx.addIssue({code:'custom',path:['rounds',i],message:'Invalid round sequence or missing puzzles'});
+    if(r.kind!==kinds[i])
+      ctx.addIssue({code:'custom',path:['rounds',i],message:'Invalid round sequence.'});
+    const {min,max}=roundPuzzleLimits(kinds[i] as RoundKind,g.opening);
+    if(r.puzzles.length<min||r.puzzles.length>max){
+      const expected=min===max?`exactly ${min}`:`between ${min} and ${max}`;
+      ctx.addIssue({code:'custom',path:['rounds',i,'puzzles'],
+        message:`${r.title} requires ${expected} puzzle${max===1?'':'s'} (found ${r.puzzles.length}).`});
+    }
     for(const p of r.puzzles){
       if(ids.has(p.id))ctx.addIssue({code:'custom',message:'Duplicate puzzle ID'});
       ids.add(p.id);
