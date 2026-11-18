@@ -468,7 +468,7 @@ function LiveSession({id,role,displayToken}:{
               </button>}
             </div>
           </div>}
-          {host&&!ended&&s.phase!=='lobby'&&
+          {host&&!ended&&
             <ScoreCorrections s={s} enabled={control&&!busy&&connected&&!s.paused} onCommand={doSend}/>}
           {host&&!ended&&<RecoveryRequests sessionId={id} onApproved={refresh}/>}
           {player&&<div className="panel player-instruction">
