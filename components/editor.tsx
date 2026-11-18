@@ -220,7 +220,7 @@ function GameEditor({id,owner}:{id:string;owner:string}){
           <textarea rows={3} maxLength={300} value={selected.hint??''} disabled={preview}
             onChange={e=>editPuzzle({...selected,hint:e.target.value})} placeholder="Optional hint for the host"/></label>
         {editingBonus&&<div className="bonus-config">
-          <h3>Bonus prize envelopes</h3><p className="muted small">One sealed envelope is selected at random.</p>
+          <h3>Bonus prize envelopes</h3><p className="muted small">The Bonus Wheel has 24 numbered positions. Each position maps to its configured envelope in order; if you enter fewer than 24 prizes, the list repeats around the wheel. The value stays sealed until the Bonus Round judgment.</p>
           {game.bonus.envelopes.map((e,i)=><div className="prize-row" key={i}>
             <input aria-label={'Envelope '+(i+1)+' label'} maxLength={80} value={e.label}
               onChange={ev=>update({...game,bonus:{...game.bonus,envelopes:game.bonus.envelopes.map((x,j)=>j===i?{...x,label:ev.target.value}:x)}})}/>
