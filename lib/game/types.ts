@@ -3,7 +3,7 @@ export type WedgeKind = 'cash' | 'bankrupt' | 'lose' | 'free' | 'wild' | 'myster
 export type Phase =
   | 'lobby' | 'tossup' | 'tossupAnswer' | 'turn' | 'spinning' | 'letter' | 'wildLetter' | 'mysteryChoice'
   | 'expressChoice' | 'express' | 'finalSpinning' | 'speedup' | 'roundResult' | 'tieTossup'
-  | 'tieAnswer' | 'bonusCategory' | 'bonusSpin' | 'bonusLetters' | 'bonusTimer'
+  | 'tieAnswer' | 'bonusCategory' | 'bonusSpin' | 'bonusSpinning' | 'bonusLetters' | 'bonusTimer'
   | 'bonusResult' | 'finished' | 'ended';
 export interface Puzzle { id: string; category: string; answer: string; hint?: string; }
 export interface Prize { label: string; value: number; }
@@ -37,6 +37,7 @@ export interface Player {
   removed: boolean;
   lastSeen: number;
 }
+export interface MysteryReveal { index: number; outcome: 'prize' | 'bankrupt'; }
 export interface Spin { id: string; index: number; wedge: Wedge; playerId: string; sequence: number; startedAt?: number; }
 export interface ScoreEvent {
   id: string;
@@ -91,6 +92,10 @@ export interface GameState {
   spin?: Spin;
   pendingSpin?: Spin;
   mysteryCash?: number;
+  /** Secret server-side winning wedge, selected once when Mystery Round starts. */
+  mysteryPrizeIndex?: number;
+  /** Only revealed outcomes are included in the audience and player projections. */
+  mysteryReveals?: MysteryReveal[];
   lastAction?: string;
   deadline?: number;
   /** Wait until the broadcast wheel has completed before resolving the wedge. */
@@ -144,6 +149,7 @@ export interface SessionView {
   players: Player[];
   currentPlayerId?: string; respondent?: string; windowId?: string; attempted: string[];
   revealed: string[]; usedLetters: string[]; spin?: Spin; pendingSpin?: Spin;
+  mysteryReveals?: MysteryReveal[];
   lastAction?: string; deadline?: number; remaining?: number; spinEndsAt?: number; frenzyRemaining?: number;
   puzzleTimedOut?: boolean;
   speedupValue?: number; speedupCanSolve?: boolean; wildCardValue?: number;
