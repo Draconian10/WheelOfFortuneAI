@@ -3,7 +3,7 @@
   position:fixed;inset:0;z-index:1200;pointer-events:none;
   display:grid;place-items:center;overflow:hidden;
   background:radial-gradient(ellipse at 50% 46%,#304e9e 0%,#111c4b 56%,#060c26 100%);
-  animation:round-overlay-appear 1.7s cubic-bezier(.19,1,.22,1) both;
+  animation:round-overlay-appear 3.2s cubic-bezier(.19,1,.22,1) both;
 }
 .round-transition-glow{
   position:absolute;inset:-35%;
@@ -27,8 +27,8 @@
 .round-transition-ornament i{display:block;width:36px;height:5px;background:#ffdda0;transform:skewX(-25deg)}
 @keyframes round-overlay-appear{
   0%{opacity:0;transform:scale(1.045)}
-  13%{opacity:1;transform:scale(1)}
-  71%{opacity:1}
+  10%{opacity:1;transform:scale(1)}
+  83%{opacity:1}
   100%{opacity:0;visibility:hidden}
 }
 @keyframes round-light-sweep{to{transform:rotate(360deg)}}

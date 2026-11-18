@@ -72,6 +72,7 @@ export const commandSchema=z.discriminatedUnion('type',[
   z.object({type:z.literal('mystery'),reveal:z.boolean()}).strict(),
   z.object({type:z.literal('express'),accept:z.boolean()}).strict(),
   z.object({type:z.literal('speedUp')}).strict(),
+  z.object({type:z.literal('speedupBuzz'),windowId:z.string().uuid()}).strict(),
   z.object({type:z.literal('adjustScore'),playerId:z.string().uuid(),
     balance:z.enum(['banked','roundMoney']),amount:z.number().int().min(-1000000).max(1000000).refine(n=>n!==0),
     reason:text(160).min(3)}).strict(),

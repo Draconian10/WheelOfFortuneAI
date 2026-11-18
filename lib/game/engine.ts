@@ -80,6 +80,7 @@ function nextPlayer(s:GameState){
   s.currentPlayerId=players[(index+1)%players.length].id;
   s.phase=s.speedupValue!==undefined?'speedup':'turn';
   s.pendingSpin=undefined;s.speedupCanSolve=false;s.wildCardValue=undefined;
+  s.windowId=undefined;s.respondent=undefined;
   s.deadline=undefined;s.remaining=undefined;
 }
 function finishRound(s:GameState){
@@ -210,7 +211,7 @@ function expire(s:GameState,ctx:Context){
     s.remaining=TOSSUP_MS;s.attempted=[];s.revealed=[];
     s.puzzleStartedAt=ctx.now;
   }else if(s.phase==='speedup'&&s.speedupCanSolve){
-    s.lastAction='The three-second solve window expired. Next contestant.';
+    s.lastAction='The three-second buzz window expired. Next contestant.';
     nextPlayer(s);
   }else if(s.phase==='tossup'){
     if(s.roundIndex===0&&s.definition.opening==='frenzy'){
@@ -278,6 +279,26 @@ function revealAutomatically(s:GameState,now:number){
   // Deterministic state also fixes older over-revealed sessions still buzzing.
   s.revealed=letters.slice(0,target);
 }
+/** Recover in-progress older sessions that already revealed every Final Spin
+ * letter before automatic completion was available. Prefer the last successful
+ * letter caller from the private journal over whoever happens to hold the turn. */
+function recoverFullyRevealedSpeedup(s:GameState,at:number){
+  if(!['speedup','speedupAnswer'].includes(s.phase)||currentRound(s)?.kind!=='final')return;
+  const answer=currentPuzzle(s).answer.toUpperCase();
+  const letters=[...new Set(answer.match(/[A-Z]/g)??[])];
+  if(!letters.length||!letters.every(letter=>s.revealed.includes(letter)))return;
+  const last=s.history?.slice().reverse().find(entry=>
+    entry.action==='letter'&&entry.stageIndex===s.roundIndex&&
+    entry.puzzleIndex===s.puzzleIndex&&!!entry.input&&
+    answer.includes(entry.input.toUpperCase())&&
+    activePlayers(s).some(p=>p.id===entry.subjectId));
+  const winner=activePlayers(s).find(p=>p.id===(last?.subjectId??s.currentPlayerId));
+  if(!winner)return;
+  const ctx:Context={userId:s.hostId,actionId:'final-spin-recovery',expectedVersion:s.actionVersion,now:at};
+  bankPuzzle(s,ctx,winner);
+  s.lastAction=winner.name+' completed the fully revealed Final Spin puzzle!';
+  recordAction(s,at,'finalSpinAutoComplete',s.lastAction,s.hostId,winner.id);
+}
 export function reconcile(s:GameState,now:number){
   if(FINISHED.has(s.phase)||s.paused)return;
   const boundary=s.hostSeen+HOST_GRACE_MS,at=Math.min(now,boundary);
@@ -287,6 +308,7 @@ export function reconcile(s:GameState,now:number){
     settleFinalSpin(s);
   if(s.phase==='bonusSpinning'&&s.spinEndsAt!==undefined&&at>=s.spinEndsAt)
     settleBonusSpin(s);
+  recoverFullyRevealedSpeedup(s,at);
   if(s.deadline!==undefined&&s.deadline<=at){
     const expiry=s.deadline;
     const ctx:Context={userId:s.hostId,actionId:'timeout:'+s.version+':'+expiry,expectedVersion:s.actionVersion,now:expiry};
@@ -518,9 +540,18 @@ export function applyCommand(original:GameState,command:Command,ctx:Context):Gam
       }
       if(s.phase==='speedup'){
         if(!vowel)p.roundMoney+=(s.speedupValue??0)*count;
+        // A fully revealed board completes the round immediately. Otherwise,
+        // the contestant has 3 seconds to *buzz*, not to finish typing.
+        const answerLetters=[...new Set(currentPuzzle(s).answer.toUpperCase().match(/[A-Z]/g)??[])];
+        if(answerLetters.every(c=>s.revealed.includes(c))){
+          bankPuzzle(s,ctx,p);
+          s.lastAction=p.name+' revealed every letter in the Final Spin puzzle and completed the round!';
+          break;
+        }
         s.speedupCanSolve=true;
+        s.windowId=crypto.randomUUID();
         s.deadline=ctx.now+SPEEDUP_SOLVE_MS;s.remaining=SPEEDUP_SOLVE_MS;
-        s.lastAction=letter+' appears '+count+' time(s). Three seconds to solve!';
+        s.lastAction=letter+' appears '+count+' time(s). Three seconds to buzz for a solution!';
         break;
       }
       if(!vowel){
@@ -588,13 +619,24 @@ export function applyCommand(original:GameState,command:Command,ctx:Context):Gam
       s.lastAction=command.accept?'Express mode! An incorrect guess means Bankrupt.':'Express declined.';
       break;
     }
-    case 'solve':{
-      phase('turn','express','speedup','letter');
+    case 'speedupBuzz':{
+      phase('speedup');
       const p=mustBeActive(s,ctx);
-      if(s.phase==='speedup'){
-        ensure(s.speedupCanSolve,'Call a correct letter before solving.');
-        ensure(s.deadline!==undefined&&ctx.now<s.deadline,'The solve window expired.',409);
-      }
+      ensure(s.speedupCanSolve&&!!s.deadline&&ctx.now<s.deadline,
+        'The three-second buzz window has expired.',409);
+      ensure(!!s.windowId&&command.windowId===s.windowId,
+        'This buzz window is no longer active.',409);
+      s.phase='speedupAnswer';
+      s.respondent=p.id;
+      s.windowId=undefined;
+      s.deadline=undefined;s.remaining=undefined;
+      s.lastAction=p.name+' buzzed in during Final Spin! Take your time entering the full answer.';
+      break;
+    }
+    case 'solve':{
+      phase('turn','express','speedupAnswer','letter');
+      const p=mustBeActive(s,ctx);
+      if(s.phase==='speedupAnswer')ensure(s.speedupCanSolve,'Buzz in before submitting a Final Spin solution.',409);
       if(s.phase==='letter')ensure(s.pendingSpin?.wedge.kind==='free','Choose a letter first.');
       checkpoint(s);s.wildCardValue=undefined;
       if(normalize(command.text)===normalize(currentPuzzle(s).answer)){bankPuzzle(s,ctx,p);}
@@ -608,9 +650,9 @@ export function applyCommand(original:GameState,command:Command,ctx:Context):Gam
       break;
     }
     case 'hostSolve':{
-      phase('turn','letter','express','speedup');
-      if(s.phase==='speedup')ensure(s.speedupCanSolve&&s.deadline!==undefined&&ctx.now<s.deadline,
-        'The current contestant has no open three-second solve window.',409);
+      phase('turn','letter','express','speedupAnswer');
+      if(s.phase==='speedupAnswer')ensure(s.speedupCanSolve,
+        'The current contestant has not buzzed in.',409);
       const p=activePlayers(s).find(p=>p.id===command.playerId);
       ensure(p&&p.id===s.currentPlayerId,'Only the active contestant may solve.');
       checkpoint(s);bankPuzzle(s,ctx,p);
@@ -641,7 +683,7 @@ export function applyCommand(original:GameState,command:Command,ctx:Context):Gam
       ensure(p,'Contestant not found.',404);
       if(command.balance==='roundMoney')
         ensure(['turn','spinning','letter','wildLetter','mysteryChoice',
-          'expressChoice','express','finalSpinning','speedup'].includes(s.phase),
+          'expressChoice','express','finalSpinning','speedup','speedupAnswer'].includes(s.phase),
           'Round earnings can only be corrected during a wheel puzzle.',409);
       const current=p[command.balance];
       ensure(Number.isSafeInteger(current+command.amount)&&current+command.amount>=0,
@@ -672,7 +714,7 @@ export function applyCommand(original:GameState,command:Command,ctx:Context):Gam
       break;
     }
     case 'pass':{
-      phase('speedup');mustBeActive(s,ctx);
+      phase('speedup','speedupAnswer');mustBeActive(s,ctx);
       ensure(s.speedupCanSolve,'Call a correct letter before passing.',409);
       nextPlayer(s);break;
     }

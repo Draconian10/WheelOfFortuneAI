@@ -33,7 +33,7 @@ export default function RoundTransition({s}:{s:SessionView}){
     prior.current=id;
     if(!next){setActive(undefined);return;}
     setActive(next);
-    const timer=setTimeout(()=>setActive(current=>current?.key===next.key?undefined:current),1700);
+    const timer=setTimeout(()=>setActive(current=>current?.key===next.key?undefined:current),3200);
     return()=>clearTimeout(timer);
   },[next?.key]);
   if(!active)return null;

@@ -702,25 +702,30 @@ describe('tiebreaker uses its own reveal epoch',()=>{
   });
 });
 
-describe('three-second Final Spin solve window',()=>{
+describe('Final Spin: buzz within three seconds, then answer without a timer',()=>{
   function speedup(){
-    let s=regular();s.roundIndex=5;s.hostSeen=START+100000;
+    let s=regular();s.roundIndex=5;s.hostSeen=START+150000;
     s=send(s,{type:'speedUp'},HOST,0);
     expect(s.phase).toBe('finalSpinning');
-    expect(s.speedupValue).toBeUndefined();
-    expect(s.spin?.wedge.kind).toBe('cash');
     const finished=structuredClone(s);
     reconcile(finished,s.spinEndsAt!+1);
     expect(finished.phase).toBe('speedup');
     expect(finished.speedupValue).toBe(s.spin!.wedge.value+1000);
     return finished;
   }
-  it('starts a three-second window after a correct consonant, with no instant cash bank',()=>{
+  function letterOpensBuzz(s:GameState,letter='C',player=PLAYERS[0]){
+    const next=send(s,{type:'letter',letter},player);
+    expect(next.phase).toBe('speedup');
+    expect(next.speedupCanSolve).toBe(true);
+    expect(next.windowId).toBeTruthy();
+    expect(next.deadline!-next.updatedAt).toBe(SPEEDUP_SOLVE_MS);
+    return next;
+  }
+  it('grants a three-second buzz window and advances when no player buzzes',()=>{
     let s=speedup();
-    expect(()=>send(s,{type:'hostSolve',playerId:PLAYERS[0]})).toThrow('open three-second');
-    s=send(s,{type:'letter',letter:'C'},PLAYERS[0]);
-    expect(s.speedupCanSolve).toBe(true);
-    expect(s.deadline!-s.updatedAt).toBe(SPEEDUP_SOLVE_MS);
+    expect(()=>send(s,{type:'hostSolve',playerId:PLAYERS[0]})).toThrow('not available');
+    expect(()=>send(s,{type:'solve',text:'CHOCOLATE CHIP PANCAKES'},PLAYERS[0])).toThrow('not available');
+    s=letterOpensBuzz(s);
     expect(s.players[0].roundMoney).toBeGreaterThan(0);
     expect(s.players[0].banked).toBe(0);
     const at=s.deadline!;
@@ -730,58 +735,112 @@ describe('three-second Final Spin solve window',()=>{
     expect(s.currentPlayerId).toBe(PLAYERS[1]);
     expect(s.phase).toBe('speedup');
     expect(s.speedupCanSolve).toBe(false);
+    expect(s.windowId).toBeUndefined();
     expect(s.deadline).toBeUndefined();
     expect(s.players[0].roundMoney).toBeGreaterThan(0);
-    expect(()=>send(s,{type:'solve',text:'CHOCOLATE CHIP PANCAKES'},PLAYERS[0],0,at+10)).toThrow();
+    expect(s.lastAction).toContain('buzz window expired');
   });
-  it('banks a correct complete solution within the timed window',()=>{
-    let s=speedup();
-    s=send(s,{type:'letter',letter:'C'},PLAYERS[0]);
-    const money=s.players[0].roundMoney;
-    s=send(s,{type:'solve',text:'CHOCOLATE CHIP PANCAKES'},PLAYERS[0],0,s.updatedAt+1000);
+  it('permits an on-time buzz, then submits the complete solution long after three seconds',()=>{
+    let s=letterOpensBuzz(speedup());
+    const deadline=s.deadline!,windowId=s.windowId!;
+    expect(()=>send(s,{type:'speedupBuzz',windowId},PLAYERS[1],0,deadline-100)).toThrow('Wait for your turn');
+    const wrongWindow=crypto.randomUUID();
+    expect(()=>send(s,{type:'speedupBuzz',windowId:wrongWindow},PLAYERS[0],0,deadline-100)).toThrow('no longer active');
+    s=send(s,{type:'speedupBuzz',windowId},PLAYERS[0],0,deadline-100);
+    expect(s.phase).toBe('speedupAnswer');
+    expect(s.deadline).toBeUndefined();
+    expect(s.remaining).toBeUndefined();
+    expect(s.windowId).toBeUndefined();
+    expect(s.respondent).toBe(PLAYERS[0]);
+    expect(viewSession(s,PLAYERS[1],s.updatedAt).puzzle.answer).toBeUndefined();
+    const roundCash=s.players[0].roundMoney;
+    // After buzzing, there is no solve deadline. The host may also judge orally.
+    const later=deadline+65000;
+    reconcile(s,later);
+    expect(s.phase).toBe('speedupAnswer');
+    expect(s.currentPlayerId).toBe(PLAYERS[0]);
+    s=send(s,{type:'solve',text:'CHOCOLATE CHIP PANCAKES'},PLAYERS[0],0,later+100);
     expect(s.phase).toBe('roundResult');
-    expect(s.players[0].banked).toBe(money);
+    expect(s.players[0].banked).toBe(roundCash);
   });
-  it('gives a free vowel a solve window but no letter earnings',()=>{
-    let s=speedup();
-    s=send(s,{type:'letter',letter:'A'},PLAYERS[0]);
-    expect(s.speedupCanSolve).toBe(true);
-    expect(s.players[0].roundMoney).toBe(0);
-    expect(s.deadline!-s.updatedAt).toBe(SPEEDUP_SOLVE_MS);
-  });
-  it('passes immediately after a wrong consonant or manual pass',()=>{
-    let s=speedup();
-    expect(()=>send(s,{type:'pass'},PLAYERS[0])).toThrow('correct letter');
-    s=send(s,{type:'letter',letter:'Z'},PLAYERS[0]);
+  it('passes to the next contestant on a wrong answer or when the player declines',()=>{
+    let s=letterOpensBuzz(speedup());
+    s=send(s,{type:'speedupBuzz',windowId:s.windowId!},PLAYERS[0]);
+    s=send(s,{type:'solve',text:'WRONG PHRASE'},PLAYERS[0]);
     expect(s.currentPlayerId).toBe(PLAYERS[1]);
-    s=send(s,{type:'letter',letter:'C'},PLAYERS[1]);
+    expect(s.phase).toBe('speedup');
+    expect(s.deadline).toBeUndefined();
+    expect(s.players[0].roundMoney).toBeGreaterThan(0);
+    s=letterOpensBuzz(s,'H',PLAYERS[1]);
+    s=send(s,{type:'speedupBuzz',windowId:s.windowId!},PLAYERS[1]);
     s=send(s,{type:'pass'},PLAYERS[1]);
     expect(s.currentPlayerId).toBe(PLAYERS[2]);
-    expect(s.deadline).toBeUndefined();
+    expect(s.phase).toBe('speedup');
   });
-  it('preserves the remaining solve window during host pause and resume',()=>{
-    let s=speedup();
-    s=send(s,{type:'letter',letter:'C'},PLAYERS[0]);
+  it('rejects buzzing after expiry, duplicate buzzes, and unsolicited correct host judgments',()=>{
+    let s=letterOpensBuzz(speedup());
+    const at=s.deadline!,windowId=s.windowId!;
+    expect(()=>send(s,{type:'speedupBuzz',windowId},PLAYERS[0],0,at)).toThrow();
+    s=send(s,{type:'speedupBuzz',windowId},PLAYERS[0],0,at-100);
+    expect(()=>send(s,{type:'speedupBuzz',windowId},PLAYERS[0])).toThrow();
+    expect(()=>send(s,{type:'hostSolve',playerId:PLAYERS[1]})).toThrow('active contestant');
+    s=send(s,{type:'hostSolve',playerId:PLAYERS[0]},HOST,0,at+60000);
+    expect(s.phase).toBe('roundResult');
+  });
+  it('preserves the remaining buzz timer over host pause and never restarts it after an accepted buzz',()=>{
+    let s=letterOpensBuzz(speedup());
     const opening=s.deadline!;
     s=send(s,{type:'pause'},HOST,0,opening-2000);
     expect(s.paused).toBe(true);
     expect(s.remaining).toBe(2000);
     s=send(s,{type:'continue'},HOST,0,opening+58000);
-    expect(s.paused).toBe(false);
     expect(s.deadline!-s.updatedAt).toBe(2000);
-    const ends=s.deadline!;
-    reconcile(s,ends);
-    expect(s.currentPlayerId).toBe(PLAYERS[1]);
-    expect(s.speedupCanSolve).toBe(false);
+    s=send(s,{type:'speedupBuzz',windowId:s.windowId!},PLAYERS[0],0,s.updatedAt+100);
+    expect(s.phase).toBe('speedupAnswer');
+    s=send(s,{type:'pause'},HOST,0,s.updatedAt+500);
+    s=send(s,{type:'continue'},HOST,0,s.updatedAt+25000);
+    expect(s.deadline).toBeUndefined();
+    expect(s.phase).toBe('speedupAnswer');
   });
-  it('denies late host adjudication; only an active contestant with time left can win',()=>{
+  it('automatically banks the round when the final unrevealed letter is called',()=>{
     let s=speedup();
-    s=send(s,{type:'letter',letter:'C'},PLAYERS[0]);
-    const expiry=s.deadline!;
-    expect(()=>send(s,{type:'hostSolve',playerId:PLAYERS[0]},HOST,0,expiry)).toThrow();
-    // A valid host oral judgment just before expiry is still allowed.
-    s=send(s,{type:'hostSolve',playerId:PLAYERS[0]},HOST,0,expiry-1);
+    s.definition.rounds[5].puzzles[0].answer='CAT';
+    s.revealed=['C','A'];s.usedLetters=['C','A'];
+    s.players[0].roundMoney=1000;
+    const money=s.speedupValue!;
+    s=send(s,{type:'letter',letter:'T'},PLAYERS[0]);
     expect(s.phase).toBe('roundResult');
+    expect(s.players[0].banked).toBe(1000+money);
+    expect(s.players[0].roundMoney).toBe(0);
+    expect(s.lastAction).toMatch(/revealed every letter/);
+    expect(s.deadline).toBeUndefined();
+    expect(s.windowId).toBeUndefined();
+    expect(viewSession(s,PLAYERS[1],s.updatedAt).puzzle.answer).toBe('CAT');
+    expect(viewSession(s,HOST,s.updatedAt,CONTROLLER).canUndoLetter).toBe(true);
+    // A mistaken last letter can still be reversed by the controlling host.
+    s=send(s,{type:'undoLetter'});
+    expect(s.phase).toBe('speedup');
+    expect(s.revealed).toEqual(['C','A']);
+    expect(s.players[0].roundMoney).toBe(1000);
+  });
+  it('recovers older fully revealed Final Spin sessions even if their last buzz window already expired',()=>{
+    const s=speedup();
+    const answer=s.definition.rounds[5].puzzles[0].answer;
+    s.revealed=[...new Set(answer.match(/[A-Z]/g)??[])];
+    s.usedLetters=s.revealed.slice();
+    s.players[0].roundMoney=3900;
+    s.currentPlayerId=PLAYERS[1];
+    s.speedupCanSolve=false;
+    s.history?.push({at:s.updatedAt,action:'letter',detail:'C was correctly called',
+      stageIndex:5,puzzleIndex:0,phase:'speedup',input:'C',subjectId:PLAYERS[0]});
+    reconcile(s,s.updatedAt+100);
+    expect(s.phase).toBe('roundResult');
+    expect(s.players[0].banked).toBe(3900);
+    expect(s.players[1].banked).toBe(0);
+    expect(s.lastAction).toContain('fully revealed');
+    expect(s.history?.at(-1)?.action).toBe('finalSpinAutoComplete');
+    reconcile(s,s.updatedAt+200);
+    expect(s.players[0].banked).toBe(3900);
   });
 });
 
