@@ -15,6 +15,9 @@ It is a separate project built from the architectural patterns of the JeopardyAI
 - Regular, Mystery, Prize, Triple Toss-Up, Final Spin, tie-breaker and Bonus Round gameplay
 - Cash separated into unbanked round earnings, secured money and prize value
 - Animated standings, host pause/resume, read-only audience links, and results CSV
+- Server-timed Final Spin animation that selects a real wheel cash wedge, then announces the cash amount plus $1,000 and starts Speed-Up only after the wheel stops
+- Television-style full-width audience display with puzzle transitions, a large synchronized wheel, and animated score counters
+- Host-only score corrections for secured or current-round money, with mandatory reasons, private history and score ledger entries; a separate Undo Last Letter action reverses only the most recent letter call without restarting the puzzle
 
 ## Run locally
 

@@ -2,7 +2,7 @@ export type RoundKind = 'tossup' | 'regular' | 'mystery' | 'prize' | 'triple' | 
 export type WedgeKind = 'cash' | 'bankrupt' | 'lose' | 'free' | 'wild' | 'mystery' | 'express' | 'million';
 export type Phase =
   | 'lobby' | 'tossup' | 'tossupAnswer' | 'turn' | 'spinning' | 'letter' | 'wildLetter' | 'mysteryChoice'
-  | 'expressChoice' | 'express' | 'speedup' | 'roundResult' | 'tieTossup'
+  | 'expressChoice' | 'express' | 'finalSpinning' | 'speedup' | 'roundResult' | 'tieTossup'
   | 'tieAnswer' | 'bonusCategory' | 'bonusSpin' | 'bonusLetters' | 'bonusTimer'
   | 'bonusResult' | 'finished' | 'ended';
 export interface Puzzle { id: string; category: string; answer: string; hint?: string; }
@@ -117,6 +117,8 @@ export interface GameState {
   events: ScoreEvent[];
   /** Optional for compatibility with sessions created before activity reporting. */
   history?: GameHistoryEntry[];
+  /** Only the immediately preceding letter command may be reversed. */
+  lastLetterActionVersion?: number;
   processed: string[];
   // A checkpoint also restores the event ledger; no reversal may cross a completed puzzle.
   undo?: Omit<GameState,'undo'>;
@@ -151,5 +153,5 @@ export interface SessionView {
   events: ScoreEvent[];
   paused: boolean; pauseReason?: string; locked: boolean;
   controllerOwned: boolean; hostConnected: boolean; serverNow: number;
-  canUndo: boolean; createdAt: number; runtimeAt?: number;
+  canUndo: boolean; canUndoLetter?: boolean; createdAt: number; runtimeAt?: number;
 }

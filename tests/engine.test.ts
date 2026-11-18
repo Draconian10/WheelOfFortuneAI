@@ -696,8 +696,14 @@ describe('three-second Final Spin solve window',()=>{
   function speedup(){
     let s=regular();s.roundIndex=5;s.hostSeen=START+100000;
     s=send(s,{type:'speedUp'},HOST,0);
-    expect(s.phase).toBe('speedup');
-    return s;
+    expect(s.phase).toBe('finalSpinning');
+    expect(s.speedupValue).toBeUndefined();
+    expect(s.spin?.wedge.kind).toBe('cash');
+    const finished=structuredClone(s);
+    reconcile(finished,s.spinEndsAt!+1);
+    expect(finished.phase).toBe('speedup');
+    expect(finished.speedupValue).toBe(s.spin!.wedge.value+1000);
+    return finished;
   }
   it('starts a three-second window after a correct consonant, with no instant cash bank',()=>{
     let s=speedup();
@@ -964,5 +970,96 @@ describe('round puzzle-count validation',()=>{
       ...frenzy.rounds[0].puzzles[0],id:crypto.randomUUID()
     });
     expect(gameSchema.safeParse(frenzy).success).toBe(true);
+  });
+});
+
+describe('Final Spin synchronized animation and Speed-Up handoff',()=>{
+  it('selects a real cash wedge, rejects early letters, then releases the same payout on every view',()=>{
+    let s=regular();s.roundIndex=5;s.hostSeen=START+100000;
+    s=send(s,{type:'speedUp'},HOST,5);
+    expect(s.phase).toBe('finalSpinning');
+    expect(s.spinEndsAt!-s.spin!.startedAt!).toBe(SPIN_DURATION_MS);
+    expect(s.speedupValue).toBeUndefined();
+    expect(s.spin?.wedge.kind).toBe('cash');
+    expect(s.spin?.index).toBeGreaterThanOrEqual(0);
+    expect(viewSession(s,PLAYERS[1],s.updatedAt).speedupValue).toBeUndefined();
+    expect(()=>send(s,{type:'speedUp'})).toThrow();
+    expect(()=>send(s,{type:'letter',letter:'C'},PLAYERS[0],0,s.updatedAt+300)).toThrow();
+
+    const settled=structuredClone(s);
+    reconcile(settled,s.spinEndsAt!+1);
+    expect(settled.phase).toBe('speedup');
+    expect(settled.spin?.id).toBe(s.spin?.id);
+    expect(settled.speedupValue).toBe(s.spin!.wedge.value+1000);
+    expect(viewSession(settled,PLAYERS[1],s.spinEndsAt!+1).speedupValue).toBe(settled.speedupValue);
+    expect(settled.history?.at(-1)?.action).toBe('finalSpinResult');
+    const result=send(settled,{type:'letter',letter:'C'},PLAYERS[0],0,s.spinEndsAt!+200);
+    expect(result.phase).toBe('speedup');
+    expect(result.speedupCanSolve).toBe(true);
+  });
+});
+
+describe('host scoreboard and letter adjudication corrections',()=>{
+  it('adjusts secured cash and round earnings with a private audit log and score event',()=>{
+    let s=regular();
+    s=send(s,{type:'adjustScore',playerId:PLAYERS[0],balance:'banked',
+      amount:1500,reason:'Missed puzzle award'});
+    expect(s.players[0].banked).toBe(1500);
+    expect(s.events.at(-1)?.delta).toBe(1500);
+    expect(s.events.at(-1)?.reason).toContain('Missed puzzle award');
+    expect(s.history?.at(-1)?.action).toBe('adjustScore');
+    expect(s.history?.at(-1)?.subjectId).toBe(PLAYERS[0]);
+
+    s=send(s,{type:'adjustScore',playerId:PLAYERS[0],balance:'banked',
+      amount:-500,reason:'Award was too high'});
+    expect(s.players[0].banked).toBe(1000);
+    s=send(s,{type:'adjustScore',playerId:PLAYERS[1],balance:'roundMoney',
+      amount:600,reason:'Corrected letter payout'});
+    expect(s.players[1].roundMoney).toBe(600);
+    expect(viewSession(s,PLAYERS[0],s.updatedAt).players[1].roundMoney).toBe(600);
+    expect(()=>send(s,{type:'adjustScore',playerId:PLAYERS[0],
+      balance:'banked',amount:-2000,reason:'Too much'})).toThrow('negative');
+  });
+  it('enforces controller authorization and correction limits',()=>{
+    const s=regular();
+    const command={type:'adjustScore',playerId:PLAYERS[0],
+      balance:'banked',amount:100,reason:'Host review'} as const;
+    expect(()=>send(s,command,PLAYERS[0])).toThrow('Only the host');
+    expect(()=>applyCommand(s,command,{
+      ...ctx(s),controller:'00000000-0000-4000-8000-000000000099'
+    })).toThrow('read-only');
+    expect(()=>send(s,{...command,amount:0})).toThrow();
+    expect(()=>send(s,{...command,amount:1.5})).toThrow();
+    expect(()=>send(s,{...command,reason:''})).toThrow();
+  });
+  it('undoes the immediate wrong letter without losing the spin or ending the round',()=>{
+    let s=regular();s.hostSeen=START+100000;s=spinAndSettle(s,PLAYERS[0],0);
+    s=send(s,{type:'letter',letter:'Z'},PLAYERS[0]);
+    expect(s.currentPlayerId).toBe(PLAYERS[1]);
+    expect(s.usedLetters).toContain('Z');
+    expect(viewSession(s,HOST,s.updatedAt,CONTROLLER).canUndoLetter).toBe(true);
+    expect(viewSession(s,PLAYERS[0],s.updatedAt).canUndoLetter).toBe(false);
+    expect(()=>send(s,{type:'undoLetter'},PLAYERS[0])).toThrow('Only the host');
+    s=send(s,{type:'undoLetter'});
+    expect(s.currentPlayerId).toBe(PLAYERS[0]);
+    expect(s.phase).toBe('letter');
+    expect(s.usedLetters).not.toContain('Z');
+    expect(s.pendingSpin?.wedge.kind).toBe('cash');
+    expect(s.history?.slice(-2).map(h=>h.action)).toEqual(['letter','undoLetter']);
+    expect(()=>send(s,{type:'undoLetter'})).toThrow('most recent letter');
+    s=send(s,{type:'letter',letter:'T'},PLAYERS[0]);
+    expect(s.players[0].roundMoney).toBe(1500);
+  });
+  it('reverses an incorrect consonant payout and blocks stale undo after another action',()=>{
+    let s=regular();s.hostSeen=START+100000;s=spinAndSettle(s,PLAYERS[0],0);
+    s=send(s,{type:'letter',letter:'T'},PLAYERS[0]);
+    expect(s.players[0].roundMoney).toBe(1500);
+    s=send(s,{type:'undoLetter'});
+    expect(s.players[0].roundMoney).toBe(0);
+    expect(s.revealed).not.toContain('T');
+    s=send(s,{type:'letter',letter:'T'},PLAYERS[0]);
+    s=send(s,{type:'spin'},PLAYERS[0]);
+    expect(viewSession(s,HOST,s.updatedAt,CONTROLLER).canUndoLetter).toBe(false);
+    expect(()=>send(s,{type:'undoLetter'})).toThrow('most recent letter');
   });
 });

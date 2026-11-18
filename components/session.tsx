@@ -25,6 +25,9 @@ import ResultsConfetti from './results-confetti';
 import HostAnswer from './host-answer';
 import BonusReveal from './bonus-reveal';
 import WedgeHelp from './wedge-help';
+import AudienceStage from './audience-stage';
+import FinalSpinAnnouncement from './final-spin-announcement';
+import ScoreCorrections from './score-corrections';
 
 const VOWELS='AEIOU';
 const LETTERS='ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
@@ -48,7 +51,7 @@ function LiveSession({id,role,displayToken}:{
   const [sound,setSound]=useState(false);
   const [settledSpinId,setSettledSpinId]=useState('');
   const spinPendingVisual=!!s?.spin?.startedAt&&
-    ['spinning','turn','letter','wildLetter','mysteryChoice','expressChoice','express','speedup'].includes(s.phase)&&
+    ['spinning','finalSpinning','turn','letter','wildLetter','mysteryChoice','expressChoice','express','speedup'].includes(s.phase)&&
     s.spin.id!==settledSpinId;
   const me=s?.players.find(p=>p.id===userId),active=s?.players.find(p=>p.id===s.currentPlayerId);
   const respondent=s?.players.find(p=>p.id===s.respondent);
@@ -88,7 +91,7 @@ function LiveSession({id,role,displayToken}:{
   },[s?.phase,sound]);
   const doSend=(command:Command)=>{void send(command);};
   const isTossup=!!s&&['tossup','tossupAnswer','tieTossup','tieAnswer'].includes(s.phase);
-  const isWheel=!!s&&['spinning','turn','letter','wildLetter','mysteryChoice','expressChoice','express','speedup'].includes(s.phase);
+  const isWheel=!!s&&['spinning','finalSpinning','turn','letter','wildLetter','mysteryChoice','expressChoice','express','speedup'].includes(s.phase);
   const isBonus=!!s&&['bonusCategory','bonusSpin','bonusLetters','bonusTimer','bonusResult'].includes(s.phase);
   const canSolve=!!s&&['turn','express','speedup','letter'].includes(s.phase)&&canAct&&
     (s.phase!=='letter'||s.pendingSpin?.wedge.kind==='free')&&
@@ -232,6 +235,7 @@ function LiveSession({id,role,displayToken}:{
             `${s.players.length} ready · ${MAX_PLAYERS-s.players.length} open ${MAX_PLAYERS-s.players.length===1?'seat':'seats'}. The host can start now.`}</p>
         </section>
       </div>:
+      audience?<AudienceStage s={s} remaining={remaining}/>:
       <div className={'game-layout '+(isBonus?'bonus-layout':'')}>
         <div className="game-primary">
           <div className="game-progress"><span className="eyebrow">
@@ -242,11 +246,16 @@ function LiveSession({id,role,displayToken}:{
               <span className="frenzy-puzzle-count"> · Puzzle {s.puzzleIndex+1}/{s.puzzlesInRound} · 30s each</span>}
           </span>
             {isTossup&&clock}</div>
+          {(s.phase==='finalSpinning'||s.phase==='speedup')&&
+            <FinalSpinAnnouncement spinning={s.phase==='finalSpinning'||spinPendingVisual}
+              value={!spinPendingVisual?s.speedupValue:undefined}/>}
           {!['bonusCategory','bonusSpin'].includes(s.phase)&&<PuzzleBoard s={s}/>}
           {s.lastAction&&<div className="action-ticker" role="status" aria-live="polite">
             <span className="action-ticker-icon"><Star size={23} aria-hidden="true"/></span>
             <div><span className="action-ticker-label">LIVE GAME UPDATE</span>
-              <strong>{spinPendingVisual?(active?.name??'The contestant')+' is spinning the wheel…':s.lastAction}</strong>
+              <strong>{s.phase==='finalSpinning'||s.phase==='speedup'&&spinPendingVisual?
+                'Final Spin is underway — Speed-Up starts when the wheel stops.':
+                spinPendingVisual?(active?.name??'The contestant')+' is spinning the wheel…':s.lastAction}</strong>
             </div>
           </div>}
           {wedgeInfo&&<WedgeHelp kind={wedgeInfo.kind}/>}
@@ -279,7 +288,7 @@ function LiveSession({id,role,displayToken}:{
           </section>}
           {isWheel&&<div className="wheel-game-grid">
             <div className="wheel-area"><Wheel kind={wheelKind} spin={s.spin} onSpinSettled={setSettledSpinId}/>
-              {s.speedupValue!==undefined&&<p className="speedup-banner">FINAL SPIN · {money(s.speedupValue)} per consonant</p>}
+              {s.speedupValue!==undefined&&!spinPendingVisual&&<p className="speedup-banner">FINAL SPIN · {money(s.speedupValue)} per consonant</p>}
             </div>
             <section className="panel turn-panel">
               <div className="eyebrow">CURRENT TURN</div>
@@ -287,7 +296,7 @@ function LiveSession({id,role,displayToken}:{
                 <div><h2>{active?.name}</h2><p className="muted">{active?.id===userId?'Your move!':'Time to make a move'}</p></div></div>
               <div className="round-money"><div><small>Round earnings</small><strong>{money(active?.roundMoney??0)}</strong></div>
                 <div><small>Secured cash</small><strong>{money(active?.banked??0)}</strong></div></div>
-              {(s.phase==='spinning'||spinPendingVisual)&&<div className="spin-progress" role="status">
+              {(s.phase==='spinning'||s.phase==='finalSpinning'||spinPendingVisual)&&<div className="spin-progress" role="status">
                 <RotateCcw size={17} aria-hidden="true"/> The wheel is spinning. Wait for the result.
               </div>}
               {s.phase==='turn'&&!spinPendingVisual&&<div className="turn-actions">
@@ -304,7 +313,7 @@ function LiveSession({id,role,displayToken}:{
                   <button className="button secondary full" disabled={!canAct}
                     title="Host calls the final spin: lock the wheel value and begin Speed-Up play."
                     onClick={()=>doSend({type:'speedUp'})}><Timer size={16}/> Start Final Spin</button>
-                  <p>Host-controlled Speed-Up: locks one consonant value and ends regular spinning.</p>
+                  <p>The wheel spins once more, then locks the value for Speed-Up.</p>
                 </div>}
               </div>}
               {s.phase==='letter'&&!spinPendingVisual&&<>
@@ -459,6 +468,8 @@ function LiveSession({id,role,displayToken}:{
               </button>}
             </div>
           </div>}
+          {host&&!ended&&
+            <ScoreCorrections s={s} enabled={control&&!busy&&connected&&!s.paused} onCommand={doSend}/>}
           {host&&!ended&&<RecoveryRequests sessionId={id} onApproved={refresh}/>}
           {player&&<div className="panel player-instruction">
             <div className="eyebrow">HOW TO PLAY</div>

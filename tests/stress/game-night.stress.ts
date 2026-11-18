@@ -25,7 +25,7 @@ function log(scenario:string,started:number,checks:number,metrics:Record<string,
   writeFileSync(output+'/progress.json',JSON.stringify(reports,null,2));
 }
 function context(s:GameState,user=host,index=0,actionId=crypto.randomUUID()):Context{
-  if(s.spinEndsAt!==undefined&&s.phase==='spinning')now=Math.max(now+1,s.spinEndsAt+1);
+  if(s.spinEndsAt!==undefined&&['spinning','finalSpinning'].includes(s.phase))now=Math.max(now+1,s.spinEndsAt+1);
   else now=Math.max(now+1,s.updatedAt+1);
   return {userId:user,controller:user===host?controller:undefined,now,
     expectedVersion:s.actionVersion,actionId,random:(n:number)=>index%n,pinVerified:true};
@@ -172,7 +172,9 @@ it('complete five-player show: every round, prize, Mystery, Express, Triple Toss
   expect(s.players[2].banked).toBeGreaterThanOrEqual(10000);checks++;
   // Final: fixed consonant value / no further spins, then the highest scorer advances.
   s=await move(s,{type:'speedUp'});
-  expect(s.phase).toBe('speedup');checks++;
+  expect(s.phase).toBe('finalSpinning');checks++;
+  expect(s.spinEndsAt).toBeDefined();checks++;
+  expect(s.spin?.wedge.kind).toBe('cash');checks++;
   current=s.currentPlayerId!;
   s=await move(s,{type:'letter',letter:'C'},current);
   expect(s.speedupCanSolve).toBe(true);checks++;

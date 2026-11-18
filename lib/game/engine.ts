@@ -15,7 +15,7 @@ const VOWELS = 'AEIOU';
 const BASE_BONUS = 'RSTLNE';
 const HOST_COMMANDS = new Set([
   'claim','pause','continue','lockLobby','remove','start','nextRound','revealTimedOut',
-  'judgeBuzz','hostSolve','speedUp','startBonus','bonusJudge','finish','undo','end'
+  'judgeBuzz','hostSolve','speedUp','adjustScore','undoLetter','startBonus','bonusJudge','finish','undo','end'
 ]);
 const FINISHED = new Set(['finished','ended']);
 export class GameError extends Error {
@@ -232,6 +232,18 @@ function settleSpin(s:GameState){
   }
   recordAction(s,resolvedAt,'wheelResult',s.lastAction??'Wheel resolved.',undefined,p.id,spin.wedge.label);
 }
+function settleFinalSpin(s:GameState){
+  if(s.phase!=='finalSpinning'||!s.spin||s.spinEndsAt===undefined)return;
+  const settledAt=s.spinEndsAt;
+  s.spinEndsAt=undefined;
+  s.speedupValue=s.spin.wedge.value+1000;
+  s.phase='speedup';
+  s.speedupCanSolve=false;
+  s.pendingSpin=undefined;
+  s.deadline=undefined;s.remaining=undefined;
+  s.lastAction='FINAL SPIN! Consonants are worth $'+s.speedupValue+' each. Speed-Up begins!';
+  recordAction(s,settledAt,'finalSpinResult',s.lastAction,undefined,s.currentPlayerId,s.spin.wedge.label);
+}
 function revealAutomatically(s:GameState,now:number){
   if(!['tossup','tieTossup'].includes(s.phase)||s.puzzleStartedAt===undefined)return;
   const puzzle=currentPuzzle(s);
@@ -256,6 +268,8 @@ export function reconcile(s:GameState,now:number){
   const boundary=s.hostSeen+HOST_GRACE_MS,at=Math.min(now,boundary);
   if(s.phase==='spinning'&&s.spinEndsAt!==undefined&&at>=s.spinEndsAt)
     settleSpin(s);
+  if(s.phase==='finalSpinning'&&s.spinEndsAt!==undefined&&at>=s.spinEndsAt)
+    settleFinalSpin(s);
   if(s.deadline!==undefined&&s.deadline<=at){
     const expiry=s.deadline;
     const ctx:Context={userId:s.hostId,actionId:'timeout:'+s.version+':'+expiry,expectedVersion:s.actionVersion,now:expiry};
@@ -295,7 +309,7 @@ export function applyCommand(original:GameState,command:Command,ctx:Context):Gam
   }
   if(FINISHED.has(s.phase)&&!['heartbeat','claim'].includes(command.type))
     throw new GameError('This game is finished.',409);
-  if(s.paused&&!['claim','heartbeat','continue','end'].includes(command.type))
+  if(s.paused&&!['claim','heartbeat','continue','end','adjustScore'].includes(command.type))
     throw new GameError('The game is paused.',409);
   const phase=(...valid:GameState['phase'][])=>ensure(valid.includes(s.phase),'This action is not available right now.',409);
   switch(command.type){
@@ -464,6 +478,9 @@ export function applyCommand(original:GameState,command:Command,ctx:Context):Gam
       }
       if(s.phase==='express'&&vowel)ensure(p.roundMoney>=250,'Not enough money for an Express vowel.');
       if(s.phase==='speedup')ensure(!s.speedupCanSolve,'Solve or pass before calling another letter.');
+      // Save the full puzzle/score/turn state for the latest letter only.
+      checkpoint(s);
+      s.lastLetterActionVersion=original.actionVersion+1;
       const repeated=s.usedLetters.includes(letter);
       if(!repeated)s.usedLetters.push(letter);
       if(s.phase==='express'&&vowel)p.roundMoney-=250;
@@ -568,12 +585,57 @@ export function applyCommand(original:GameState,command:Command,ctx:Context):Gam
     }
     case 'speedUp':{
       phase('turn');ensure(currentRound(s)?.kind==='final','Speed-Up belongs to Round 4.');
-      s.wildCardValue=undefined;
-      const available=wheelForRound('final').filter(w=>w.kind==='cash');
-      s.speedupValue=available[random(ctx,available.length)].value+1000;
-      s.pendingSpin=undefined;s.phase='speedup';s.speedupCanSolve=false;
+      const wheel=wheelForRound('final');
+      const available=wheel.map((w,index)=>({w,index})).filter(({w})=>w.kind==='cash');
+      const selected=available[random(ctx,available.length)];
+      s.wildCardValue=undefined;s.speedupValue=undefined;
+      s.spin={id:crypto.randomUUID(),index:selected.index,wedge:selected.w,
+        playerId:s.currentPlayerId!,sequence:(s.spin?.sequence??0)+1,startedAt:ctx.now};
+      s.spinEndsAt=ctx.now+SPIN_DURATION_MS;
+      s.pendingSpin=undefined;s.phase='finalSpinning';s.speedupCanSolve=false;
       s.deadline=undefined;s.remaining=undefined;
-      s.lastAction='Final Spin! Consonants are worth $'+s.speedupValue+' each.';
+      s.lastAction='FINAL SPIN! The wheel is spinning. Speed-Up begins when it stops!';
+      break;
+    }
+    case 'adjustScore':{
+      ensure(Number.isSafeInteger(command.amount)&&command.amount!==0&&Math.abs(command.amount)<=1000000,
+        'Enter a nonzero whole-dollar correction up to $1,000,000.');
+      ensure(command.reason.trim().length>=3&&command.reason.length<=160,
+        'Enter a short reason for the score correction.');
+      s.undo=undefined;
+      ensure(s.phase!=='lobby','Start the game before correcting scores.',409);
+      const p=activePlayers(s).find(p=>p.id===command.playerId);
+      ensure(p,'Contestant not found.',404);
+      if(command.balance==='roundMoney')
+        ensure(['turn','spinning','letter','wildLetter','mysteryChoice',
+          'expressChoice','express','finalSpinning','speedup'].includes(s.phase),
+          'Round earnings can only be corrected during a wheel puzzle.',409);
+      const current=p[command.balance];
+      ensure(Number.isSafeInteger(current+command.amount)&&current+command.amount>=0,
+        'A score correction cannot make a balance negative.');
+      p[command.balance]=current+command.amount;
+      const part=command.balance==='banked'?'secured cash':'current-round earnings';
+      mark(s,ctx,p,command.amount,'Host correction to '+part+': '+command.reason);
+      s.lastAction='Host adjusted '+p.name+'\'s '+part+' by '+
+        (command.amount>0?'+':'')+'$'+command.amount+'. Reason: '+command.reason;
+      break;
+    }
+    case 'undoLetter':{
+      ensure(s.lastLetterActionVersion===original.actionVersion&&!!s.undo,
+        'Only the most recent letter call can be reversed, before another action.',409);
+      const previous=s.undo;
+      ensure(previous.roundIndex===s.roundIndex&&previous.puzzleIndex===s.puzzleIndex,
+        'Cannot reverse a letter from another puzzle.',409);
+      const journal=s.history??[];
+      const seen=new Set(s.processed);
+      for(const key of Object.keys(s))Reflect.deleteProperty(s,key);
+      Object.assign(s,structuredClone(previous));
+      // Keep the original wrong call in the private audit trail, then record its reversal.
+      s.history=journal;
+      s.processed=[...new Set([...s.processed,...seen])];
+      s.hostSeen=original.hostSeen;
+      s.undo=undefined;s.lastLetterActionVersion=undefined;
+      s.lastAction='Host reversed the most recent letter call. The contestant may choose again.';
       break;
     }
     case 'pass':{
@@ -632,6 +694,7 @@ export function applyCommand(original:GameState,command:Command,ctx:Context):Gam
     }
     case 'finish':phase('bonusResult');s.phase='finished';s.locked=true;break;
     case 'undo':{
+      ensure(s.lastLetterActionVersion!==original.actionVersion,'Use Undo Last Letter for a letter correction.',409);
       ensure(s.undo,'No judgment to undo.');
       const prev=s.undo;
       ensure(prev.roundIndex===s.roundIndex&&prev.puzzleIndex===s.puzzleIndex,'Cannot undo another puzzle.');
@@ -653,8 +716,16 @@ export function applyCommand(original:GameState,command:Command,ctx:Context):Gam
       s.lastAction=s.closedInLobby?'Lobby closed by the host.':'The host ended the game.';
       s.phase='ended';s.locked=true;s.paused=false;s.deadline=undefined;s.windowId=undefined;break;
   }
+  // Once another action occurs, do not roll back an earlier letter or turn.
+  if(!['heartbeat','letter','undoLetter'].includes(command.type)&&
+    original.lastLetterActionVersion===original.actionVersion){
+    if(!['solve','hostSolve','judgeBuzz','bonusSolve','bonusJudge'].includes(command.type))
+      s.undo=undefined;
+    s.lastLetterActionVersion=undefined;
+  }
   if(command.type!=='heartbeat'){
-    const subject=original.respondent??original.currentPlayerId;
+    const subject=command.type==='adjustScore'?command.playerId:
+      original.respondent??original.currentPlayerId;
     const input=command.type==='letter'||command.type==='bonusLetter'?command.letter:
       command.type==='solve'||command.type==='bonusSolve'?command.text:
       command.type==='judgeBuzz'||command.type==='bonusJudge'?command.correct?'Correct':'Incorrect':undefined;
@@ -705,6 +776,7 @@ export function viewSession(s:GameState,userId:string,now:number,controller?:str
     bonusWon:s.bonusWon,tripleWinners:s.tripleWinners,tieEligible:s.tieEligible,
     events:s.events,paused:s.paused,pauseReason:s.pauseReason,locked:s.locked,
     controllerOwned:host&&controller===s.controller,hostConnected:now-s.hostSeen<HOST_GRACE_MS,
-    serverNow:now,canUndo:host&&!!s.undo,createdAt:s.createdAt
+    serverNow:now,canUndo:host&&!!s.undo&&s.lastLetterActionVersion!==s.actionVersion,
+    canUndoLetter:host&&!!s.undo&&s.lastLetterActionVersion===s.actionVersion,createdAt:s.createdAt
   };
 }
