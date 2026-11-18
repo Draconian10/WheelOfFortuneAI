@@ -21,7 +21,7 @@ function clockText(ms:number){
 export default function AudienceStage({s,remaining}:{s:SessionView;remaining:number}){
   const [settledId,setSettledId]=useState('');
   const isWheel=wheelPhases.has(s.phase);
-  const isBonus=['bonusSpin','bonusCategory','bonusLetters','bonusTimer','bonusResult'].includes(s.phase);
+  const isBonus=['bonusSpin','bonusSpinning','bonusCategory','bonusLetters','bonusTimer','bonusResult'].includes(s.phase);
   const isTossup=['tossup','tossupAnswer','tieTossup','tieAnswer'].includes(s.phase);
   const isFinalSpin=s.phase==='finalSpinning'||s.phase==='speedup';
   const pending=!!s.spin?.startedAt&&isWheel&&s.spin.id!==settledId;
@@ -31,7 +31,8 @@ export default function AudienceStage({s,remaining}:{s:SessionView;remaining:num
   const nowPlaying=s.players.find(p=>p.id===s.currentPlayerId);
   const respondent=s.players.find(p=>p.id===s.respondent);
   const finalist=s.players.find(p=>p.id===s.bonusPlayerId);
-  const hasWheel=isWheel||(isBonus&&!!s.spin&&['bonusSpin','bonusCategory'].includes(s.phase));
+  const bonusSpinning=s.phase==='bonusSpinning';
+  const hasWheel=isWheel||(isBonus&&['bonusSpin','bonusSpinning','bonusCategory'].includes(s.phase));
   const label=s.phase==='roundResult'?'PUZZLE COMPLETE':
     s.phase==='bonusResult'?'BONUS FINALE':
     isTossup?'BUZZER ROUND':isFinalSpin?'FINAL SHOWDOWN':
@@ -52,11 +53,12 @@ export default function AudienceStage({s,remaining}:{s:SessionView;remaining:num
       value={spinning?undefined:s.speedupValue}/>}
     <div className={'broadcast-main '+(hasWheel?'with-wheel':'board-only')}>
       <div className="broadcast-board" key={s.roundKind+':'+s.roundIndex+':'+s.puzzleIndex}>
-        {['bonusSpin','bonusCategory'].includes(s.phase)?
+        {['bonusSpin','bonusSpinning','bonusCategory'].includes(s.phase)?
           <div className="broadcast-bonus-prompt">
             <span>THE BONUS FINALE</span>
             <strong>{finalist?.name??'Our finalist'}</strong>
-            <p>{s.phase==='bonusSpin'?'Spinning for a sealed prize':
+            <p>{s.phase==='bonusSpinning'?'Selecting a numbered sealed envelope…':
+              s.phase==='bonusSpin'?'Get ready to spin for a sealed prize':
               'Choosing the Bonus Round category'}</p>
           </div>:
           <PuzzleBoard s={s}/>}
@@ -70,9 +72,10 @@ export default function AudienceStage({s,remaining}:{s:SessionView;remaining:num
           <p className="broadcast-speedup-value">{money(s.speedupValue)} PER CONSONANT</p>}
       </div>
       {hasWheel&&<div className="broadcast-wheel-area">
-        <div className="broadcast-wheel-heading">{spinning?'THE FINAL SPIN':isBonus?'BONUS WHEEL':'SPIN TO WIN'}</div>
-        <Wheel kind={isBonus?'regular':kind} spin={s.spin} compact onSpinSettled={setSettledId}/>
-        <p>{spinning?'The wheel decides the final cash value':
+        <div className="broadcast-wheel-heading">{bonusSpinning?'BONUS WHEEL SPINNING':spinning?'THE FINAL SPIN':isBonus?'BONUS WHEEL':'SPIN TO WIN'}</div>
+        <Wheel kind={isBonus?'regular':kind} bonus={isBonus} mysteryReveals={s.mysteryReveals} spin={s.spin} compact onSpinSettled={setSettledId}/>
+        <p>{bonusSpinning?'One numbered envelope determines the prize':
+          spinning?'The wheel decides the final cash value':
           isBonus?'The prize envelope stays sealed':
           s.phase==='speedup'?'One letter at a time':
           nowPlaying?nowPlaying.name+' has the wheel':'The wheel is ready'}</p>
@@ -82,7 +85,8 @@ export default function AudienceStage({s,remaining}:{s:SessionView;remaining:num
       <div className="broadcast-scoreboard"><Standings s={s} compact/></div>
       <div className="broadcast-event" role="status" aria-live="polite">
         <span><Trophy size={18}/> LIVE GAME UPDATE</span>
-        <strong>{spinning?'Final Spin in progress — Speed-Up begins when it lands':
+        <strong>{bonusSpinning?'Bonus Wheel in progress — the sealed prize is being selected':
+          spinning?'Final Spin in progress — Speed-Up begins when it lands':
           s.lastAction??'Contestants are getting ready'}</strong>
       </div>
     </div>

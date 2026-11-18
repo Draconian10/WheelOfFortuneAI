@@ -1,0 +1,42 @@
+/* Cinematic but non-blocking broadcast intros shared by host, players, projector. */
+.round-transition-overlay{
+  position:fixed;inset:0;z-index:1200;pointer-events:none;
+  display:grid;place-items:center;overflow:hidden;
+  background:radial-gradient(ellipse at 50% 46%,#304e9e 0%,#111c4b 56%,#060c26 100%);
+  animation:round-overlay-appear 1.7s cubic-bezier(.19,1,.22,1) both;
+}
+.round-transition-glow{
+  position:absolute;inset:-35%;
+  background:conic-gradient(from 20deg,transparent 0deg,#f2d07d18 50deg,transparent 84deg,#76afff20 144deg,transparent 182deg,#f2d07d1c 260deg,transparent 320deg);
+  animation:round-light-sweep 5s linear infinite;
+}
+.round-transition-card{position:relative;isolation:isolate;text-align:center;width:min(92%,1050px);
+  display:flex;flex-direction:column;align-items:center;gap:15px;
+  padding:clamp(25px,5vw,70px) 20px;
+  border-top:3px solid #e9bd62;border-bottom:3px solid #e9bd62;
+  background:linear-gradient(100deg,#121d4700,#233771bd 25%,#1b2d69b3 75%,#121d4700);
+  text-shadow:0 5px 18px #040b2b}
+.round-transition-kicker{display:flex;align-items:center;justify-content:center;gap:11px;
+  color:#ffe6a3;font-weight:950;letter-spacing:.24em;
+  font-size:clamp(.85rem,1.5vw,1.4rem)}
+.round-transition-card strong{font-family:'Barlow Condensed',Impact,sans-serif;
+  color:#fff9e7;font-size:clamp(3.8rem,10vw,10rem);font-weight:950;
+  line-height:.95;letter-spacing:.035em}
+.round-transition-card p{font-size:clamp(1.1rem,2.2vw,2.1rem);color:#eaf0ff;margin:5px 0 0}
+.round-transition-ornament{display:flex;gap:12px;margin-top:10px}
+.round-transition-ornament i{display:block;width:36px;height:5px;background:#ffdda0;transform:skewX(-25deg)}
+@keyframes round-overlay-appear{
+  0%{opacity:0;transform:scale(1.045)}
+  13%{opacity:1;transform:scale(1)}
+  71%{opacity:1}
+  100%{opacity:0;visibility:hidden}
+}
+@keyframes round-light-sweep{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){
+  .round-transition-overlay{animation:none;background:#142451;opacity:.94}
+  .round-transition-glow{animation:none;display:none}
+}
+@media(max-width:540px){
+  .round-transition-kicker{letter-spacing:.13em}
+  .round-transition-card{gap:11px;padding:32px 8px}
+}

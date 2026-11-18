@@ -1,7 +1,7 @@
 import type { Command } from './schema';
 import type { Context, GameDefinition, GameRound, GameState, Player, Prize, Puzzle, SessionView, Spin } from './types';
 import { playable } from './schema';
-import { secureIndex, wheelForRound } from './wheel';
+import { secureIndex, wheelForRound, MYSTERY_INDICES, bonusWheelWedges, bonusEnvelopeForSlot } from './wheel';
 
 export const HOST_GRACE_MS = 30000;
 export const TOSSUP_MS = 30000;
@@ -35,7 +35,7 @@ export const normalize=(answer:string)=>answer.toUpperCase().replace(/[^A-Z0-9]/
 export function currentRound(s:GameState):GameRound|undefined{return s.definition.rounds[s.roundIndex];}
 export function currentPuzzle(s:GameState):Puzzle{
   if(s.phase==='tieTossup'||s.phase==='tieAnswer')return s.definition.tiebreaker;
-  if(['bonusCategory','bonusSpin','bonusLetters','bonusTimer','bonusResult','finished'].includes(s.phase)&&s.bonusPuzzleIndex!==undefined)
+  if(['bonusCategory','bonusSpin','bonusSpinning','bonusLetters','bonusTimer','bonusResult','finished'].includes(s.phase)&&s.bonusPuzzleIndex!==undefined)
     return s.definition.bonus.puzzles[s.bonusPuzzleIndex];
   return currentRound(s)?.puzzles[s.puzzleIndex]??s.definition.tiebreaker;
 }
@@ -70,6 +70,7 @@ function resetPuzzle(s:GameState){
   s.revealed=[];s.usedLetters=[];s.respondent=undefined;s.attempted=[];
   s.pendingSpin=undefined;s.speedupCanSolve=false;s.wildCardValue=undefined;
   s.mysteryCash=undefined;s.spin=undefined;s.undo=undefined;
+  s.mysteryReveals=undefined;
   s.answerStartedAt=undefined;s.spinEndsAt=undefined;s.puzzleTimedOut=undefined;s.frenzyRemaining=undefined;
 }
 function nextPlayer(s:GameState){
@@ -88,6 +89,11 @@ function finishRound(s:GameState){
 }
 function setRound(s:GameState,ctx:Context){
   resetPuzzle(s);s.deadline=undefined;s.remaining=undefined;s.speedupValue=undefined;s.frenzyRemaining=undefined;
+  // The same two mystery wedges retain their secret outcomes for the whole round.
+  // Reveal commands never reroll an outcome. Other rounds clear that secret.
+  s.mysteryPrizeIndex=currentRound(s)?.kind==='mystery'
+    ?MYSTERY_INDICES[random(ctx,MYSTERY_INDICES.length)]:undefined;
+  s.mysteryReveals=[];
   const players=activePlayers(s);
   ensure(players.length>0,'No contestants remain.');
   for(const p of players){p.roundMoney=0;p.pendingPrizes=[];p.pendingMillionWedge=false;}
@@ -244,6 +250,15 @@ function settleFinalSpin(s:GameState){
   s.lastAction='FINAL SPIN! Consonants are worth $'+s.speedupValue+' each. Speed-Up begins!';
   recordAction(s,settledAt,'finalSpinResult',s.lastAction,undefined,s.currentPlayerId,s.spin.wedge.label);
 }
+function settleBonusSpin(s:GameState){
+  if(s.phase!=='bonusSpinning'||!s.spin||s.spinEndsAt===undefined)return;
+  const settledAt=s.spinEndsAt;
+  s.spinEndsAt=undefined;
+  s.phase='bonusCategory';
+  s.lastAction='Bonus Wheel landed on sealed envelope '+String(s.spin.index+1).padStart(2,'0')+
+    '. Choose one of three puzzle categories.';
+  recordAction(s,settledAt,'bonusWheelResult',s.lastAction,undefined,s.bonusPlayerId);
+}
 function revealAutomatically(s:GameState,now:number){
   if(!['tossup','tieTossup'].includes(s.phase)||s.puzzleStartedAt===undefined)return;
   const puzzle=currentPuzzle(s);
@@ -270,6 +285,8 @@ export function reconcile(s:GameState,now:number){
     settleSpin(s);
   if(s.phase==='finalSpinning'&&s.spinEndsAt!==undefined&&at>=s.spinEndsAt)
     settleFinalSpin(s);
+  if(s.phase==='bonusSpinning'&&s.spinEndsAt!==undefined&&at>=s.spinEndsAt)
+    settleBonusSpin(s);
   if(s.deadline!==undefined&&s.deadline<=at){
     const expiry=s.deadline;
     const ctx:Context={userId:s.hostId,actionId:'timeout:'+s.version+':'+expiry,expectedVersion:s.actionVersion,now:expiry};
@@ -436,7 +453,7 @@ export function applyCommand(original:GameState,command:Command,ctx:Context):Gam
     case 'spin':{
       phase('turn');const p=mustBeActive(s,ctx);
       s.wildCardValue=undefined;
-      const choices=wheelForRound(currentRound(s)!.kind);
+      const choices=wheelForRound(currentRound(s)!.kind,s.mysteryReveals);
       const index=random(ctx,choices.length),wedge=choices[index];
       const spin:Spin={id:crypto.randomUUID(),index,wedge,playerId:p.id,sequence:(s.spin?.sequence??0)+1};
       spin.startedAt=ctx.now;
@@ -539,13 +556,29 @@ export function applyCommand(original:GameState,command:Command,ctx:Context):Gam
     }
     case 'mystery':{
       phase('mysteryChoice');const p=mustBeActive(s,ctx);
+      const index=s.pendingSpin?.index;
+      ensure(index!==undefined&&MYSTERY_INDICES.includes(index as typeof MYSTERY_INDICES[number])&&
+        s.pendingSpin?.wedge.kind==='mystery','No unrevealed Mystery Wedge is active.',409);
       if(command.reveal){
+        // Legacy live rooms without preassigned outcomes get a one-time choice;
+        // new games always choose the winning wedge before Mystery Round begins.
+        if(s.mysteryPrizeIndex===undefined)
+          s.mysteryPrizeIndex=MYSTERY_INDICES[random(ctx,MYSTERY_INDICES.length)];
+        const outcome=index===s.mysteryPrizeIndex?'prize':'bankrupt';
+        s.mysteryReveals=[...(s.mysteryReveals??[]),{index,outcome}];
         p.roundMoney-=s.mysteryCash??0;
-        if(random(ctx,2)===0){s.lastAction='Mystery reveal: BANKRUPT!';bankrupt(s,p);}
-        else {p.pendingPrizes.push({label:'Mystery $10,000',value:10000});
-          s.lastAction=p.name+' found the $10,000 Mystery prize!';
-          s.phase='turn';s.pendingSpin=undefined;}
-      }else{s.lastAction=p.name+' kept the Mystery cash.';s.phase='turn';s.pendingSpin=undefined;}
+        if(outcome==='bankrupt'){
+          bankrupt(s,p);
+          s.lastAction='Mystery Wedge '+(index===5?'A':'B')+' revealed BANKRUPT!';
+        }else{
+          p.pendingPrizes.push({label:'Mystery $10,000',value:10000});
+          s.lastAction=p.name+' revealed the $10,000 Mystery prize!';
+          s.phase='turn';s.pendingSpin=undefined;
+        }
+      }else{
+        s.lastAction=p.name+' kept the Mystery cash.';
+        s.phase='turn';s.pendingSpin=undefined;
+      }
       s.mysteryCash=undefined;
       break;
     }
@@ -652,11 +685,15 @@ export function applyCommand(original:GameState,command:Command,ctx:Context):Gam
       phase('bonusSpin');
       ensure(ctx.userId===s.bonusPlayerId||host,'Only the finalist can spin the bonus wheel.',403);
       const index=random(ctx,24);
-      const wheel=wheelForRound('regular');
-      s.spin={id:crypto.randomUUID(),index,wedge:{...wheel[index],label:'BONUS'},playerId:s.bonusPlayerId!,sequence:(s.spin?.sequence??0)+1};
-      s.bonusEnvelopeIndex=random(ctx,availableBonusEnvelopes(s).length);
+      const wheel=bonusWheelWedges();
+      s.spin={id:crypto.randomUUID(),index,wedge:wheel[index],
+        playerId:s.bonusPlayerId!,sequence:(s.spin?.sequence??0)+1,startedAt:ctx.now};
+      // The exact selected slot resolves to an actual configured envelope.
+      // Never pick a second, unrelated random prize after the wheel stops.
+      s.bonusEnvelopeIndex=bonusEnvelopeForSlot(index,availableBonusEnvelopes(s).length);
       s.revealed=[];s.usedLetters=[];
-      s.phase='bonusCategory';s.lastAction='The bonus envelope is sealed. Choose one of three puzzle categories.';
+      s.phase='bonusSpinning';s.spinEndsAt=ctx.now+SPIN_DURATION_MS;
+      s.lastAction='Bonus Wheel spinning! The sealed envelope is being selected.';
       break;
     }
     case 'bonusLetter':{
@@ -766,6 +803,7 @@ export function viewSession(s:GameState,userId:string,now:number,controller?:str
     currentPlayerId:s.currentPlayerId,respondent:s.respondent,windowId:s.windowId,
     attempted:s.attempted,revealed:s.revealed,usedLetters:s.usedLetters,
     spin:s.spin,pendingSpin:s.pendingSpin,lastAction:s.lastAction,puzzleTimedOut:s.puzzleTimedOut,
+    mysteryReveals:s.mysteryReveals?.map(entry=>({...entry})),
     deadline:s.deadline,remaining:s.remaining,spinEndsAt:s.spinEndsAt,frenzyRemaining:s.frenzyRemaining,speedupValue:s.speedupValue,
     speedupCanSolve:s.speedupCanSolve,wildCardValue:s.wildCardValue,
     bonusPlayerId:s.bonusPlayerId,bonusPuzzleIndex:s.bonusPuzzleIndex,

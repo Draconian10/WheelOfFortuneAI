@@ -106,7 +106,7 @@ export function useRoom(id:string,role:'host'|'player'|'audience',displayToken?:
       const timedReveal=phase==='tossup'||phase==='tieTossup';
       // A 4.2-second server-authoritative spin must be reconciled promptly
       // even when subscribed to Realtime (which only announces saved changes).
-      const spinning=phase==='spinning'||phase==='finalSpinning';
+      const spinning=phase==='spinning'||phase==='finalSpinning'||phase==='bonusSpinning';
       const delay=spinning?1200:role==='audience'&&displayToken?2500
         :timedReveal?2200:realtimeRef.current?10000:3000;
       timer=setTimeout(async()=>{await refresh();if(!stop)poll();},delay+Math.random()*250);
@@ -117,7 +117,10 @@ export function useRoom(id:string,role:'host'|'player'|'audience',displayToken?:
     document.addEventListener('visibilitychange',focus);
     return()=>{stop=true;clearTimeout(timer);window.removeEventListener('online',focus);
       window.removeEventListener('focus',focus);document.removeEventListener('visibilitychange',focus);};
-  },[userId,refresh,role,displayToken]);
+  // Restart the fallback interval when the game enters a time-sensitive phase.
+  // Otherwise a previously scheduled 10-second poll can outlive a 4.2-second
+  // Bonus Wheel spin even though the server has already settled its prize.
+  },[userId,refresh,role,displayToken,state?.phase]);
   const send=useCallback(async(command:Command,quiet=false)=>{
     const current=reference.current;
     if(!current)return false;

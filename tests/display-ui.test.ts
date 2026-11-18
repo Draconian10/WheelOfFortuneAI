@@ -7,6 +7,8 @@ import HostAnswer from '@/components/host-answer';
 import BonusReveal from '@/components/bonus-reveal';
 import WedgeHelp from '@/components/wedge-help';
 import AudienceStage from '@/components/audience-stage';
+import RoundTransition,{cueFor} from '@/components/round-transition';
+import Wheel from '@/components/wheel';
 import FinalSpinAnnouncement from '@/components/final-spin-announcement';
 import ScoreCorrections from '@/components/score-corrections';
 import {newSession,viewSession} from '@/lib/game/engine';
@@ -113,6 +115,41 @@ describe('Bonus Round envelope reveal makes payouts unambiguous',()=>{
     expect(html).toContain('$50,000');
     expect(html).toContain('$63,250');
     expect(html).not.toContain('NOT AWARDED');
+  });
+});
+
+describe('broadcast round transitions and Bonus Wheel artwork',()=>{
+  const host='00000000-0000-4000-8000-000000000001';
+  it('names each stage, Mystery, Triple Toss-Up, the Bonus Finale, and tie-breakers',()=>{
+    const state=newSession(starterGame(),'00000000-0000-4000-8000-000000000010',host,'654210',1000);
+    const view=viewSession(state,host,1000);
+    for(const [index,kind,keyword] of [[1,'regular','ROUND ONE'],[2,'mystery','MYSTERY ROUND'],
+      [3,'prize','PRIZE PUZZLE'],[4,'triple','TRIPLE TOSS-UP'],[5,'final','ROUND FOUR']] as const){
+      const next={...view,roundIndex:index,roundKind:kind,phase:'turn' as const};
+      expect(cueFor(next)?.title).toBe(keyword);
+      expect(cueFor(next)?.key).toBe('round:'+index);
+    }
+    expect(cueFor({...view,phase:'bonusSpinning'})?.title).toBe('BONUS ROUND');
+    expect(cueFor({...view,phase:'tieTossup'})?.title).toBe('SUDDEN DEATH');
+    expect(cueFor({...view,phase:'finished'})).toBeUndefined();
+    const hidden=renderToStaticMarkup(createElement(RoundTransition,{s:view}));
+    expect(hidden).not.toContain('round-transition-overlay');
+  });
+  it('draws a dedicated 24-envelope Bonus Wheel without prematurely showing prize values',()=>{
+    const html=renderToStaticMarkup(createElement(Wheel,{kind:'regular',bonus:true}));
+    expect(html).toContain('Bonus Wheel with 24 numbered sealed envelopes');
+    expect(html).toContain('wheel-bonus');
+    expect(html).toContain('BONUS');
+    expect(html).not.toContain('$40,000');
+    expect(html).not.toContain('BANKRUPT');
+  });
+  it('replaces exposed Mystery Wedges with an explicitly shown outcome',()=>{
+    const unrevealed=renderToStaticMarkup(createElement(Wheel,{kind:'mystery'}));
+    expect(unrevealed).toContain('MYSTERY');
+    const changed=renderToStaticMarkup(createElement(Wheel,{kind:'mystery',
+      mysteryReveals:[{index:5,outcome:'prize'},{index:19,outcome:'bankrupt'}]}));
+    expect(changed).toContain('10K WON');
+    expect(changed).toContain('BANKRUPT');
   });
 });
 

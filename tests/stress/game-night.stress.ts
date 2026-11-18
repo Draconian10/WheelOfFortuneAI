@@ -25,7 +25,7 @@ function log(scenario:string,started:number,checks:number,metrics:Record<string,
   writeFileSync(output+'/progress.json',JSON.stringify(reports,null,2));
 }
 function context(s:GameState,user=host,index=0,actionId=crypto.randomUUID()):Context{
-  if(s.spinEndsAt!==undefined&&['spinning','finalSpinning'].includes(s.phase))now=Math.max(now+1,s.spinEndsAt+1);
+  if(s.spinEndsAt!==undefined&&['spinning','finalSpinning','bonusSpinning'].includes(s.phase))now=Math.max(now+1,s.spinEndsAt+1);
   else now=Math.max(now+1,s.updatedAt+1);
   return {userId:user,controller:user===host?controller:undefined,now,
     expectedVersion:s.actionVersion,actionId,random:(n:number)=>index%n,pinVerified:true};
@@ -192,6 +192,8 @@ it('complete five-player show: every round, prize, Mystery, Express, Triple Toss
   const finalist=s.bonusPlayerId!;
   expect(standings.some(row=>row.id===finalist)).toBe(true);checks++;
   s=await move(s,{type:'spinBonus'},finalist);
+  expect(s.phase).toBe('bonusSpinning');checks++;
+  expect(s.spin?.index).toBeGreaterThanOrEqual(0);checks++;
   expect(viewSession(s,players[0],now).bonusPrize).toBeUndefined();checks++;
   s=await move(s,{type:'chooseBonus',index:0},finalist);
   for(const letter of ['B','C','D','A'])s=await move(s,{type:'bonusLetter',letter},finalist);
