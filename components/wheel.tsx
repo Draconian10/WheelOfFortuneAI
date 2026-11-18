@@ -31,6 +31,7 @@ export default function Wheel({kind,spin,compact=false,onSpinSettled}:{
   const uid=useId().replace(/:/g,'');
   const [rotation,setRotation]=useState(0);
   const [spinning,setSpinning]=useState(false);
+  const [duration,setDuration]=useState(4200);
   const [settledId,setSettledId]=useState('');
   const seen=useRef('');
   const completed=useRef('');
@@ -47,17 +48,26 @@ export default function Wheel({kind,spin,compact=false,onSpinSettled}:{
     const desired=(360-spin.index*15)%360;
     const current=((angleRef.current%360)+360)%360;
     const extra=(desired-current+360)%360;
-    const next=angleRef.current+2160+extra;
+    // A late-joining audience tab or a reconnect must not replay the entire spin.
+    // The server picks both the wedge and the start time; every screen lands on it.
+    const elapsed=spin.startedAt===undefined?0:Math.max(0,Date.now()-spin.startedAt);
+    const left=Math.max(0,4200-elapsed);
+    const next=angleRef.current+(left>80?2160:0)+extra;
     const id=spin.id;
+    if(left<=80){
+      angleRef.current=next;seen.current=id;setSpinning(false);setRotation(next);
+      settle(id);
+      return;
+    }
     const frame=requestAnimationFrame(()=>{
       angleRef.current=next;
       seen.current=id;
+      setDuration(left);
       setSpinning(true);
       setRotation(next);
     });
-    // Some devices suppress transitionend (reduced motion / background tab).
-    // The fallback keeps the status usable without firing twice.
-    const fallback=setTimeout(()=>settle(id),4300);
+    // Reduced motion/background tabs may not send transitionend.
+    const fallback=setTimeout(()=>settle(id),left+120);
     return()=>{cancelAnimationFrame(frame);clearTimeout(fallback);};
   },[spin?.id,spin?.index]);
 
@@ -65,7 +75,7 @@ export default function Wheel({kind,spin,compact=false,onSpinSettled}:{
     <span className="wheel-pointer" aria-hidden="true"/>
     <div className="wheel-disc" style={{
       transform:'rotate('+rotation+'deg)',
-      transition:spinning?'transform 4.2s cubic-bezier(.09,.72,.09,1)':'none'
+      transition:spinning?'transform '+duration+'ms cubic-bezier(.09,.72,.09,1)':'none'
     }} onTransitionEnd={e=>{
       if(e.target===e.currentTarget&&spin)settle(spin.id);
     }}>
