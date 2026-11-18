@@ -243,7 +243,7 @@ function LiveSession({id,role,displayToken}:{
             {isTossup&&clock}</div>
           {!['bonusCategory','bonusSpin'].includes(s.phase)&&<PuzzleBoard s={s}/>}
           {s.lastAction&&<div className="action-ticker" role="status" aria-live="polite">
-            <span className="action-ticker-icon"><Star size={19} aria-hidden="true"/></span>
+            <span className="action-ticker-icon"><Star size={23} aria-hidden="true"/></span>
             <div><span className="action-ticker-label">LIVE GAME UPDATE</span>
               <strong>{spinPendingVisual?(active?.name??'The contestant')+' is spinning the wheel…':s.lastAction}</strong>
             </div>
@@ -266,7 +266,8 @@ function LiveSession({id,role,displayToken}:{
               <>
                 <h2>{respondent?.name} buzzed in first!</h2>
                 <p className="muted">Please give your full solution aloud. The host judges the response.</p>
-                {host&&s.puzzle.answer&&<HostAnswer answer={s.puzzle.answer} hint={s.puzzle.hint}/>}
+                {host&&s.puzzle.answer&&<HostAnswer
+                  key={s.roundIndex+':'+s.puzzleIndex+':buzz'} answer={s.puzzle.answer} hint={s.puzzle.hint}/>}
                 {control&&<div className="button-row centered">
                   <button className="button success" onClick={()=>doSend({type:'judgeBuzz',correct:true})} disabled={busy||s.paused}>
                     <Check size={18}/> Correct</button>
@@ -298,8 +299,12 @@ function LiveSession({id,role,displayToken}:{
                   <Star size={18}/> Use Wild Card · Extra consonant at {money(s.wildCardValue)} each
                 </button>}
                 {solveButton}
-                {control&&s.roundKind==='final'&&<button className="button secondary full"
-                  onClick={()=>doSend({type:'speedUp'})}><Timer size={16}/> Start Final Spin</button>}
+                {control&&s.roundKind==='final'&&<div className="final-spin-control">
+                  <button className="button secondary full" disabled={!canAct}
+                    title="Host calls the final spin: lock the wheel value and begin Speed-Up play."
+                    onClick={()=>doSend({type:'speedUp'})}><Timer size={16}/> Start Final Spin</button>
+                  <p>Host-controlled Speed-Up: locks one consonant value and ends regular spinning.</p>
+                </div>}
               </div>}
               {s.phase==='letter'&&!spinPendingVisual&&<>
                 <h3>{s.pendingSpin?.wedge.kind==='free'?'Free Play — choose any letter':
@@ -340,19 +345,20 @@ function LiveSession({id,role,displayToken}:{
                   onClick={()=>doSend({type:'pass'})}>Pass turn <ArrowRight size={16}/></button>}
               </>}
               {solutionForm}
-              {host&&s.puzzle.answer&&s.phase!=='spinning'&&<HostAnswer answer={s.puzzle.answer} hint={s.puzzle.hint}/>}
+              {host&&s.puzzle.answer&&s.phase!=='spinning'&&<HostAnswer
+                key={s.roundIndex+':'+s.puzzleIndex} answer={s.puzzle.answer} hint={s.puzzle.hint}/>}
               {control&&['turn','letter','express','speedup'].includes(s.phase)&&
                 (s.phase!=='speedup'||(s.speedupCanSolve&&remaining>0))&&
                 <div className="host-oral">
-                <button className="text-button" onClick={()=>{
-                  // A confirmation popup consumes the entire three-second
-                  // Speed-Up interval; the host must be able to award a spoken
-                  // solution immediately while the contestant's window is open.
-                  if(active&&(s.phase==='speedup'||confirm('Confirm '+active.name+' solved the puzzle correctly aloud?')))
-                    doSend({type:'hostSolve',playerId:active.id});
-                }}>Mark spoken solution correct</button>
+                <button className="button primary full host-solve-button"
+                  disabled={!canAct||(s.phase==='speedup'&&remaining<=0)}
+                  onClick={()=>{
+                    // A confirmation popup would consume the three-second
+                    // Speed-Up solve window; retain confirmation elsewhere.
+                    if(active&&(s.phase==='speedup'||confirm('Confirm '+active.name+' solved the puzzle correctly aloud?')))
+                      doSend({type:'hostSolve',playerId:active.id});
+                  }}><Check size={19} strokeWidth={2.6} aria-hidden="true"/> Mark Solution Correct</button>
               </div>}
-              {!canAct&&!spinPendingVisual&&s.phase!=='spinning'&&<p className="muted tiny">Only the current contestant and controlling host can take actions.</p>}
             </section>
           </div>}
           {s.phase==='roundResult'&&<section className="panel round-complete">
@@ -409,7 +415,9 @@ function LiveSession({id,role,displayToken}:{
           </section>}
           {s.phase==='bonusTimer'&&<section className="panel bonus-stage">
             <div className="eyebrow">TEN SECONDS TO FORTUNE</div><h2>It's all on this puzzle.</h2>{clock}
-            {host&&s.puzzle.answer&&<HostAnswer answer={s.puzzle.answer} hint={s.puzzle.hint}/>} 
+            {host&&s.puzzle.answer&&<HostAnswer key={'bonus:'+s.bonusPuzzleIndex}
+              answer={s.puzzle.answer} hint={s.puzzle.hint}/>}
+
             {player&&userId===s.bonusPlayerId&&<form className="solve-form" onSubmit={e=>{
               e.preventDefault();doSend({type:'bonusSolve',text:solve});
             }}><label>Your final solution<input autoFocus required maxLength={180} value={solve}
@@ -419,14 +427,30 @@ function LiveSession({id,role,displayToken}:{
               <button className="button success" disabled={busy||remaining<=0} onClick={()=>doSend({type:'bonusJudge',correct:true})}>Correct</button>
               <button className="button danger" disabled={busy||remaining<=0} onClick={()=>doSend({type:'bonusJudge',correct:false})}>Incorrect</button></div>}
           </section>}
-          {s.phase==='bonusResult'&&<section className="panel bonus-stage bonus-reveal">
-            <div className="celebration-icon"><Gift size={40}/></div>
-            <div className="eyebrow">THE ENVELOPE REVEAL</div>
-            <h2>{s.bonusWon?'INCREDIBLE SOLVE!':'THE FINAL REVEAL'}</h2>
-            <p className="muted">{finalist?.name} {s.bonusWon?'wins':'had a chance at'}…</p>
-            <div className="bonus-prize">{s.bonusPrize?.label??'Prize'}</div>
-            <p className="muted">{s.bonusWon?'Added to the final total.':'The envelope is revealed, but the prize is not awarded.'}</p>
-            {control&&<button className="button primary" disabled={busy} onClick={()=>doSend({type:'finish'})}>
+          {s.phase==='bonusResult'&&<section className={'panel bonus-stage bonus-reveal '+(s.bonusWon?'bonus-reveal-won':'bonus-reveal-missed')}>
+            <div className="celebration-icon"><Gift size={36}/></div>
+            <div className="eyebrow">BONUS ROUND RESULT</div>
+            <h2>{s.bonusWon?'BONUS PUZZLE SOLVED!':'BONUS PUZZLE NOT SOLVED'}</h2>
+            <p className="bonus-reveal-lead">{s.bonusWon
+              ?(finalist?.name??'The finalist')+' solved the final puzzle and earned the envelope prize.'
+              :(finalist?.name??'The finalist')+' did not solve the final puzzle in time.'}</p>
+            <div className="bonus-envelope-card">
+              <span className="bonus-envelope-label">THE BONUS ENVELOPE CONTAINED</span>
+              <strong className="bonus-envelope-value">{s.bonusPrize?.label??'Mystery Prize'}</strong>
+              <span className={'bonus-award-status '+(s.bonusWon?'is-awarded':'not-awarded')}>
+                {s.bonusWon?'PRIZE AWARDED':'NOT AWARDED'}
+              </span>
+            </div>
+            <div className="bonus-result-breakdown" aria-label="Bonus round winnings summary">
+              <div><span>Main game winnings</span><strong>{money(total(finalist!)-(s.bonusWon?s.bonusPrize?.value??0:0))}</strong></div>
+              <div><span>Bonus awarded</span><strong>{money(s.bonusWon?s.bonusPrize?.value??0:0)}</strong></div>
+              <div className="bonus-result-total"><span>Total secured winnings</span><strong>{money(total(finalist!))}</strong></div>
+            </div>
+            <p className="bonus-reveal-footnote">{s.bonusWon
+              ?'The envelope prize has been added to the finalist’s total.'
+              :'The envelope is revealed for the audience only; no bonus prize is added. Main-game winnings are kept.'}</p>
+            {control&&<button className="button primary bonus-announce-button" disabled={busy||s.paused}
+              onClick={()=>doSend({type:'finish'})}>
               <Trophy size={18}/> Announce the Champion</button>}
           </section>}
         </div>

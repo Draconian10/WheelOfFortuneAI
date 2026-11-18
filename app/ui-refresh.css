@@ -670,3 +670,100 @@ body:has(.audience-container){background:#070b20}
   .wedge-help{padding:11px 12px}
   .host-private-answer-top small{margin-left:0}
 }
+
+
+/* Host response: native, keyboard-operable disclosure, closed by default. */
+.host-private-answer{padding:0;overflow:hidden;text-align:left;border:1px solid #7898c1;
+  background:linear-gradient(120deg,#0f2754,#172b5c);box-shadow:inset 3px 0 #f4c965}
+.host-private-answer[open]{border-color:#e4c377;background:linear-gradient(120deg,#10295a,#1a2c60)}
+.host-private-answer>summary{list-style:none;cursor:pointer;display:flex;gap:10px;
+  align-items:center;padding:14px 16px;min-height:57px}
+.host-private-answer>summary::-webkit-details-marker{display:none}
+.host-private-answer>summary::marker{content:''}
+.host-private-answer>summary:hover{background:#ffffff0c}
+.host-private-answer>summary:focus-visible{outline:3px solid #ffe09b;outline-offset:-3px}
+.host-private-answer-icon{display:grid;place-items:center;flex-shrink:0;color:#ffdb89}
+.host-private-answer-top>strong{flex:1;min-width:0;color:#ffe3a0;letter-spacing:.025em;
+  text-transform:none;font-size:.91rem;font-weight:850}
+.host-private-answer-tag{color:#d3def7;border:1px solid #506b9d;
+  border-radius:6px;padding:3px 7px;font-size:.64rem;font-weight:800;white-space:nowrap}
+.host-private-answer-chevron{color:#d8e4ff;flex-shrink:0;transition:transform .2s ease}
+.host-private-answer[open] .host-private-answer-chevron{transform:rotate(180deg)}
+.host-private-answer-content{padding:0 16px 16px 21px;margin:0 14px 13px;
+  border-left:3px solid #f4c965}
+.host-private-answer-response{font-family:'Barlow Condensed',sans-serif;
+  font-size:clamp(1.25rem,2.4vw,1.65rem);letter-spacing:.03em;color:#fff;
+  font-weight:900;margin:0;overflow-wrap:anywhere}
+.host-private-answer-note{margin-top:12px;color:#e1e8f9}
+.host-private-answer-note small{color:#ffdf95;letter-spacing:.08em;font-weight:850}
+.host-private-answer-note p{margin:3px 0 0;font-size:.83rem;line-height:1.5}
+.tossup-stage .host-private-answer{width:100%}
+@media(prefers-reduced-motion:reduce){.host-private-answer-chevron{transition:none}}
+
+/* Strong host adjudication action — no ornamental divider or small text link. */
+.turn-panel .host-oral{width:100%;border:0;padding:0;margin-top:5px;text-align:initial}
+.turn-panel .host-oral .host-solve-button{width:100%;display:flex;gap:10px;
+  min-height:49px;justify-content:center;align-items:center;font-weight:850;
+  box-shadow:0 5px 18px #050f2c45}
+.turn-panel .host-oral .host-solve-button svg{flex-shrink:0}
+.final-spin-control{display:flex;flex-direction:column;gap:6px}
+.final-spin-control p{margin:0;color:#cdd9f5;font-size:.77rem;line-height:1.45}
+
+/* Center the callout and let the update be the visual focal point. */
+.action-ticker{justify-content:center;text-align:center;min-height:86px;
+  background:linear-gradient(110deg,#273f7d,#23336a 45%,#273f7d);
+  border:2px solid #e7bf68;box-shadow:0 7px 27px #02082550,inset 0 1px #ffffff18;
+  gap:15px;padding:16px 22px}
+.action-ticker-icon{width:47px;height:47px;border-radius:13px}
+.action-ticker>div{align-items:center;gap:4px}
+.action-ticker-label{font-size:.75rem;color:#ffdf92;letter-spacing:.12em}
+.action-ticker strong{font-family:inherit;font-size:clamp(1.1rem,1.45vw,1.32rem);
+  color:#fff8e7;line-height:1.4;letter-spacing:.005em}
+@media(max-width:540px){
+  .action-ticker{padding:13px 11px;gap:9px;min-height:76px}
+  .action-ticker-icon{width:38px;height:38px}
+  .action-ticker strong{font-size:1rem}
+  .action-ticker-label{font-size:.66rem}
+  .host-private-answer>summary{padding:12px;gap:7px}
+  .host-private-answer-top>strong{font-size:.82rem}
+  .host-private-answer-tag{font-size:.58rem;padding:2px 5px}
+  .host-private-answer-content{margin:0 10px 10px;padding:0 10px 12px}
+}
+
+/* Separate the sealed envelope's face value from the actually awarded prize. */
+.bonus-reveal{width:100%;gap:13px;padding:27px clamp(16px,3vw,35px);
+  background:linear-gradient(160deg,#1e315f,#13224c);overflow-wrap:anywhere}
+.bonus-reveal .celebration-icon{width:65px;height:65px}
+.bonus-reveal h2{font-size:clamp(1.8rem,3.5vw,2.7rem);line-height:1.08}
+.bonus-reveal-lead{font-size:.98rem;color:#dce6ff;line-height:1.5;max-width:560px}
+.bonus-envelope-card{display:flex;align-items:center;flex-direction:column;gap:10px;
+  width:min(100%,560px);padding:23px 18px;border:1px solid #9e93a7;
+  border-radius:18px;background:linear-gradient(160deg,#20326c,#152551);
+  box-shadow:inset 0 1px #ffffff20}
+.bonus-envelope-label{font-size:.73rem;font-weight:850;letter-spacing:.125em;color:#d7e1fa}
+.bonus-envelope-value{font-family:'Barlow Condensed',sans-serif;
+  font-size:clamp(2.4rem,5.5vw,4.2rem);font-weight:900;color:#ffdc85;line-height:1.02}
+.bonus-award-status{display:inline-block;padding:6px 12px;border-radius:999px;
+  font-size:.75rem;font-weight:900;letter-spacing:.08em}
+.bonus-award-status.is-awarded{background:#17684c;border:1px solid #4ccf9a;color:#baffdf}
+.bonus-award-status.not-awarded{background:#53273a;border:1px solid #d483a0;color:#ffd5dd}
+.bonus-result-breakdown{width:min(100%,560px);display:grid;grid-template-columns:1fr 1fr;
+  gap:10px;text-align:left}
+.bonus-result-breakdown>div{min-width:0;display:flex;flex-direction:column;gap:7px;
+  padding:11px 14px;border-radius:12px;background:#12234d;border:1px solid #52699e}
+.bonus-result-breakdown span{color:#cbd8f5;font-size:.75rem;font-weight:750}
+.bonus-result-breakdown strong{font-family:'Barlow Condensed',sans-serif;
+  font-size:1.8rem;line-height:1.12;color:#ffe09b;overflow-wrap:anywhere}
+.bonus-result-breakdown>.bonus-result-total{grid-column:1/-1;
+  flex-direction:row;align-items:center;justify-content:space-between;
+  background:#2c3c75;border-color:#a69461}
+.bonus-result-total strong{font-size:2rem}
+.bonus-reveal-footnote{font-size:.81rem;color:#d4e0f7;max-width:570px;line-height:1.6}
+.bonus-announce-button{min-height:48px}
+@media(max-width:520px){
+  .bonus-result-breakdown{grid-template-columns:1fr 1fr;gap:7px}
+  .bonus-result-breakdown>div{padding:10px}
+  .bonus-result-breakdown strong{font-size:1.45rem}
+  .bonus-result-total strong{font-size:1.7rem}
+  .bonus-envelope-card{padding:18px 12px}
+}
