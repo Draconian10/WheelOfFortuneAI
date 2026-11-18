@@ -199,3 +199,22 @@ describe('television-style audience and final spin presentation',()=>{
     expect(html).not.toContain('Apply Score Correction'); // Form stays collapsed until opened.
   });
 });
+
+describe('broadcast Final Spin buzzer and untimed answer',()=>{
+  it('announces the player answer after the buzz without displaying a running deadline or private answer',()=>{
+    const host='00000000-0000-4000-8000-000000000001';
+    const player='00000000-0000-4000-8000-000000000002';
+    const s=newSession(starterGame(),'00000000-0000-4000-8000-000000000010',host,'113355',1000);
+    s.roundIndex=5;s.phase='speedupAnswer';s.speedupValue=1900;s.speedupCanSolve=true;
+    s.currentPlayerId=player;s.respondent=player;
+    s.players=[{id:player,name:'Jon',seat:0,banked:9350,roundMoney:14600,
+      prizes:[],pendingPrizes:[],wildCard:false,millionWedge:false,removed:false,lastSeen:1000}];
+    const audience=viewSession(s,host,1100,undefined,true);
+    const html=renderToStaticMarkup(createElement(AudienceStage,{s:audience,remaining:0}));
+    expect(html).toContain('Jon buzzed in!');
+    expect(html).toContain('Take your time');
+    expect(html).toContain('$1,900');
+    expect(html).not.toContain('00:00');
+    expect(html).not.toContain(s.definition.rounds[5].puzzles[0].answer);
+  });
+});
