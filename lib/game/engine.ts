@@ -598,6 +598,11 @@ export function applyCommand(original:GameState,command:Command,ctx:Context):Gam
       break;
     }
     case 'adjustScore':{
+      ensure(Number.isSafeInteger(command.amount)&&command.amount!==0&&Math.abs(command.amount)<=1000000,
+        'Enter a nonzero whole-dollar correction up to $1,000,000.');
+      ensure(command.reason.trim().length>=3&&command.reason.length<=160,
+        'Enter a short reason for the score correction.');
+      s.undo=undefined;
       ensure(s.phase!=='lobby','Start the game before correcting scores.',409);
       const p=activePlayers(s).find(p=>p.id===command.playerId);
       ensure(p,'Contestant not found.',404);
