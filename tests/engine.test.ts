@@ -1033,7 +1033,7 @@ describe('host scoreboard and letter adjudication corrections',()=>{
     expect(()=>send(s,{...command,reason:''})).toThrow();
   });
   it('undoes the immediate wrong letter without losing the spin or ending the round',()=>{
-    let s=regular();s=spinAndSettle(s,PLAYERS[0],0);
+    let s=regular();s.hostSeen=START+100000;s=spinAndSettle(s,PLAYERS[0],0);
     s=send(s,{type:'letter',letter:'Z'},PLAYERS[0]);
     expect(s.currentPlayerId).toBe(PLAYERS[1]);
     expect(s.usedLetters).toContain('Z');
@@ -1051,7 +1051,7 @@ describe('host scoreboard and letter adjudication corrections',()=>{
     expect(s.players[0].roundMoney).toBe(1500);
   });
   it('reverses an incorrect consonant payout and blocks stale undo after another action',()=>{
-    let s=regular();s=spinAndSettle(s,PLAYERS[0],0);
+    let s=regular();s.hostSeen=START+100000;s=spinAndSettle(s,PLAYERS[0],0);
     s=send(s,{type:'letter',letter:'T'},PLAYERS[0]);
     expect(s.players[0].roundMoney).toBe(1500);
     s=send(s,{type:'undoLetter'});
