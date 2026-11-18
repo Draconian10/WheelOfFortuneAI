@@ -25,6 +25,7 @@ import ResultsConfetti from './results-confetti';
 import HostAnswer from './host-answer';
 import BonusReveal from './bonus-reveal';
 import WedgeHelp from './wedge-help';
+import RoundTransition from './round-transition';
 import AudienceStage from './audience-stage';
 import FinalSpinAnnouncement from './final-spin-announcement';
 import ScoreCorrections from './score-corrections';
@@ -92,7 +93,7 @@ function LiveSession({id,role,displayToken}:{
   const doSend=(command:Command)=>{void send(command);};
   const isTossup=!!s&&['tossup','tossupAnswer','tieTossup','tieAnswer'].includes(s.phase);
   const isWheel=!!s&&['spinning','finalSpinning','turn','letter','wildLetter','mysteryChoice','expressChoice','express','speedup'].includes(s.phase);
-  const isBonus=!!s&&['bonusCategory','bonusSpin','bonusLetters','bonusTimer','bonusResult'].includes(s.phase);
+  const isBonus=!!s&&['bonusCategory','bonusSpin','bonusSpinning','bonusLetters','bonusTimer','bonusResult'].includes(s.phase);
   const canSolve=!!s&&['turn','express','speedup','letter'].includes(s.phase)&&canAct&&
     (s.phase!=='letter'||s.pendingSpin?.wedge.kind==='free')&&
     (s.phase!=='speedup'||(s.speedupCanSolve&&remaining>0));
@@ -166,6 +167,7 @@ function LiveSession({id,role,displayToken}:{
       </div>
     </div>
     {headline}
+    <RoundTransition s={s}/>
     {error&&<p className="error" role="alert">{error}</p>}
     {host&&!ended&&!control&&<section className="panel claim-panel">
       <div className="claim-heading"><Lock size={20} aria-hidden="true"/>
@@ -249,7 +251,7 @@ function LiveSession({id,role,displayToken}:{
           {(s.phase==='finalSpinning'||s.phase==='speedup')&&
             <FinalSpinAnnouncement spinning={s.phase==='finalSpinning'||spinPendingVisual}
               value={!spinPendingVisual?s.speedupValue:undefined}/>}
-          {!['bonusCategory','bonusSpin'].includes(s.phase)&&<PuzzleBoard s={s}/>}
+          {!['bonusCategory','bonusSpin','bonusSpinning'].includes(s.phase)&&<PuzzleBoard s={s}/> }
           {s.lastAction&&<div className="action-ticker" role="status" aria-live="polite">
             <span className="action-ticker-icon"><Star size={23} aria-hidden="true"/></span>
             <div><span className="action-ticker-label">LIVE GAME UPDATE</span>
@@ -287,7 +289,7 @@ function LiveSession({id,role,displayToken}:{
               </>}
           </section>}
           {isWheel&&<div className="wheel-game-grid">
-            <div className="wheel-area"><Wheel kind={wheelKind} spin={s.spin} onSpinSettled={setSettledSpinId}/>
+            <div className="wheel-area"><Wheel kind={wheelKind} spin={s.spin} mysteryReveals={s.mysteryReveals} onSpinSettled={setSettledSpinId}/>
               {s.speedupValue!==undefined&&!spinPendingVisual&&<p className="speedup-banner">FINAL SPIN · {money(s.speedupValue)} per consonant</p>}
             </div>
             <section className="panel turn-panel">
@@ -394,20 +396,24 @@ function LiveSession({id,role,displayToken}:{
             <div className="bonus-star">✦</div><div className="eyebrow">THE GRAND FINALE</div>
             <h2>{finalist?.name}, pick your category!</h2>
             <p className="muted">The bonus envelope is sealed. Choose a category for the ten-second puzzle.</p>
-            {s.spin&&<div className="bonus-wheel"><Wheel kind="regular" spin={s.spin} compact/></div>}
+            {s.spin&&<div className="bonus-wheel"><Wheel kind="regular" bonus spin={s.spin} compact/></div>}
             <div className="bonus-categories">{s.bonusCategories?.map((name,i)=>
               <button key={i} className="bonus-category" disabled={!canAct&&userId!==s.bonusPlayerId||s.paused||busy}
                 onClick={()=>doSend({type:'chooseBonus',index:i})}>
                 <span>OPTION 0{i+1}</span><strong>{name}</strong><ArrowRight size={17}/></button>)}</div>
           </section>}
-          {s.phase==='bonusSpin'&&<section className="panel bonus-stage">
-            <div className="eyebrow">THE BONUS WHEEL</div>
-            <h2>{finalist?.name}, spin for a sealed prize!</h2>
-            <p className="muted">The envelope stays secret until the puzzle is judged.</p>
-            <div className="bonus-wheel"><Wheel kind="regular" spin={s.spin} compact/></div>
-            {(control||userId===s.bonusPlayerId)&&<button className="button primary"
+          {['bonusSpin','bonusSpinning'].includes(s.phase)&&<section className="panel bonus-stage bonus-spin-stage">
+            <div className="eyebrow">THE 24-ENVELOPE BONUS WHEEL</div>
+            <h2>{s.phase==='bonusSpinning'?'The Bonus Wheel is spinning!':
+              finalist?.name+', spin for a sealed prize!'}</h2>
+            <p className="muted">{s.phase==='bonusSpinning'?
+              'The pointer is selecting one numbered envelope. Categories unlock after it lands.':
+              'Each numbered slot corresponds to a real prize envelope. Its value stays sealed until the puzzle is judged.'}</p>
+            <div className="bonus-wheel"><Wheel kind="regular" bonus spin={s.spin} compact/></div>
+            {s.phase==='bonusSpin'&&(control||userId===s.bonusPlayerId)&&<button className="button primary"
               disabled={busy||s.paused||!connected} onClick={()=>doSend({type:'spinBonus'})}>
               <RotateCcw size={18}/> Spin Bonus Wheel</button>}
+            {s.phase==='bonusSpinning'&&<p className="bonus-spin-wait" role="status">Sealed envelope in motion…</p>}
           </section>}
           {s.phase==='bonusLetters'&&<section className="panel bonus-stage">
             <div className="eyebrow">BONUS ROUND · PICK YOUR LETTERS</div>
