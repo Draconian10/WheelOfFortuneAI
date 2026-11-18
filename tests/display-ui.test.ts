@@ -6,6 +6,9 @@ import PuzzleBoard from '@/components/puzzle-board';
 import HostAnswer from '@/components/host-answer';
 import BonusReveal from '@/components/bonus-reveal';
 import WedgeHelp from '@/components/wedge-help';
+import AudienceStage from '@/components/audience-stage';
+import FinalSpinAnnouncement from '@/components/final-spin-announcement';
+import ScoreCorrections from '@/components/score-corrections';
 import {newSession,viewSession} from '@/lib/game/engine';
 import {starterGame} from '@/lib/game/starter';
 
@@ -110,5 +113,52 @@ describe('Bonus Round envelope reveal makes payouts unambiguous',()=>{
     expect(html).toContain('$50,000');
     expect(html).toContain('$63,250');
     expect(html).not.toContain('NOT AWARDED');
+  });
+});
+
+describe('television-style audience and final spin presentation',()=>{
+  const host='00000000-0000-4000-8000-000000000001';
+  const player='00000000-0000-4000-8000-000000000002';
+  it('shows a visible synchronized final spin announcement and does not leak the private answer',()=>{
+    const state=newSession(starterGame(),'00000000-0000-4000-8000-000000000010',host,'456789',1000);
+    state.roundIndex=5;state.phase='finalSpinning';
+    state.players=[{id:player,name:'Taylor',seat:0,banked:2000,roundMoney:500,
+      prizes:[],pendingPrizes:[],wildCard:false,millionWedge:false,removed:false,lastSeen:1000}];
+    state.currentPlayerId=player;
+    state.spin={id:crypto.randomUUID(),index:0,wedge:{kind:'cash',value:500,label:'$500',color:'#fff'},
+      playerId:player,sequence:1,startedAt:1000};
+    state.spinEndsAt=5200;
+    const audience=viewSession(state,host,2000,undefined,true);
+    expect(audience.puzzle.answer).toBeUndefined();
+    const html=renderToStaticMarkup(createElement(AudienceStage,{s:audience,remaining:0}));
+    expect(html).toContain('broadcast-stage');
+    expect(html).toContain('FINAL SPIN!');
+    expect(html).toContain('LIVE GAME UPDATE');
+    expect(html).toContain('Taylor');
+    expect(html).not.toContain(state.definition.rounds[5].puzzles[0].answer);
+    expect(html).not.toContain('Apply Score Correction');
+    expect(html).not.toContain('$1,500 PER CONSONANT');
+  });
+  it('announces the Speed-Up value only after the final spin settles',()=>{
+    const spinning=renderToStaticMarkup(createElement(FinalSpinAnnouncement,{spinning:true}));
+    expect(spinning).toContain('FINAL SPIN!');
+    expect(spinning).not.toContain('per matching consonant');
+    const ready=renderToStaticMarkup(createElement(FinalSpinAnnouncement,{spinning:false,value:1500}));
+    expect(ready).toContain('$1,500');
+    expect(ready).toContain('Speed-Up');
+  });
+  it('only offers the letter reversal when the host projection supports it',()=>{
+    const state=newSession(starterGame(),'00000000-0000-4000-8000-000000000010',host,'456789',1000);
+    state.phase='turn';state.roundIndex=1;
+    state.players=[{id:player,name:'Taylor',seat:0,banked:2000,roundMoney:500,
+      prizes:[],pendingPrizes:[],wildCard:false,millionWedge:false,removed:false,lastSeen:1000}];
+    const view=viewSession(state,host,1100,undefined);
+    view.canUndoLetter=true;
+    const html=renderToStaticMarkup(createElement(ScoreCorrections,{
+      s:view,enabled:true,onCommand:()=>{}
+    }));
+    expect(html).toContain('Undo Last Letter');
+    expect(html).toContain('Adjust a contestant score');
+    expect(html).not.toContain('Apply Score Correction'); // Form stays collapsed until opened.
   });
 });
