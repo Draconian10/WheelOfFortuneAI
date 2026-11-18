@@ -35,7 +35,7 @@ export default function RoundTransition({s}:{s:SessionView}){
     setActive(next);
     const timer=setTimeout(()=>setActive(current=>current?.key===next.key?undefined:current),1700);
     return()=>clearTimeout(timer);
-  },[next?.key,s.phase,s.roundIndex]);
+  },[next?.key]);
   if(!active)return null;
   return <div className="round-transition-overlay" aria-live="polite" role="status"
     aria-label={active.title+' — '+active.subtitle}>
