@@ -151,6 +151,6 @@ export default function Wheel({kind,spin,compact=false,onSpinSettled,bonus=false
         </>}
       </svg>
     </div>
-    {spin&&<div className="wheel-result" aria-live="polite">{settledId===spin.id?(bonus?'ENVELOPE '+spin.wedge.label:spin.wedge.label):'SPINNING…'}</div>}
+    {spin&&<div className="wheel-result" aria-live="polite">{settledId===spin.id?(bonus?'ENVELOPE '+spin.wedge.label:wedges[spin.index]?.label??spin.wedge.label):'SPINNING…'}</div>}
   </div>;
 }
