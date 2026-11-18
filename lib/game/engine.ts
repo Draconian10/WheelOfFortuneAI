@@ -279,6 +279,26 @@ function revealAutomatically(s:GameState,now:number){
   // Deterministic state also fixes older over-revealed sessions still buzzing.
   s.revealed=letters.slice(0,target);
 }
+/** Recover in-progress older sessions that already revealed every Final Spin
+ * letter before automatic completion was available. Prefer the last successful
+ * letter caller from the private journal over whoever happens to hold the turn. */
+function recoverFullyRevealedSpeedup(s:GameState,at:number){
+  if(!['speedup','speedupAnswer'].includes(s.phase)||currentRound(s)?.kind!=='final')return;
+  const answer=currentPuzzle(s).answer.toUpperCase();
+  const letters=[...new Set(answer.match(/[A-Z]/g)??[])];
+  if(!letters.length||!letters.every(letter=>s.revealed.includes(letter)))return;
+  const last=s.history?.slice().reverse().find(entry=>
+    entry.action==='letter'&&entry.stageIndex===s.roundIndex&&
+    entry.puzzleIndex===s.puzzleIndex&&!!entry.input&&
+    answer.includes(entry.input.toUpperCase())&&
+    activePlayers(s).some(p=>p.id===entry.subjectId));
+  const winner=activePlayers(s).find(p=>p.id===(last?.subjectId??s.currentPlayerId));
+  if(!winner)return;
+  const ctx:Context={userId:s.hostId,actionId:'final-spin-recovery',expectedVersion:s.actionVersion,now:at};
+  bankPuzzle(s,ctx,winner);
+  s.lastAction=winner.name+' completed the fully revealed Final Spin puzzle!';
+  recordAction(s,at,'finalSpinAutoComplete',s.lastAction,s.hostId,winner.id);
+}
 export function reconcile(s:GameState,now:number){
   if(FINISHED.has(s.phase)||s.paused)return;
   const boundary=s.hostSeen+HOST_GRACE_MS,at=Math.min(now,boundary);
@@ -288,6 +308,7 @@ export function reconcile(s:GameState,now:number){
     settleFinalSpin(s);
   if(s.phase==='bonusSpinning'&&s.spinEndsAt!==undefined&&at>=s.spinEndsAt)
     settleBonusSpin(s);
+  recoverFullyRevealedSpeedup(s,at);
   if(s.deadline!==undefined&&s.deadline<=at){
     const expiry=s.deadline;
     const ctx:Context={userId:s.hostId,actionId:'timeout:'+s.version+':'+expiry,expectedVersion:s.actionVersion,now:expiry};
