@@ -1076,6 +1076,7 @@ describe('host scoreboard and letter adjudication corrections',()=>{
 
 describe('predetermined Mystery Wedge outcomes',()=>{
   function mystery(startWinner=1){
+    counter=0; // Fixture clock should not outlive the 30-second host grace window.
     let s=regular();
     s.phase='roundResult';s.hostSeen=START+150000;
     s=send(s,{type:'nextRound'},HOST,startWinner);
@@ -1145,6 +1146,7 @@ describe('physical Bonus Wheel slot-to-prize mapping',()=>{
     expect(()=>bonusEnvelopeForSlot(24,5)).toThrow();
   });
   it('uses exactly the spun envelope, keeps it sealed, and blocks premature category selection',()=>{
+    counter=0; // Keep join/start activity within the simulated host heartbeat window.
     let s=regular();s.hostSeen=START+150000;
     s.phase='bonusSpin';s.bonusPlayerId=PLAYERS[0];
     s=send(s,{type:'spinBonus'},PLAYERS[0],17);
