@@ -4,7 +4,7 @@ import {Sparkles} from 'lucide-react';
 import type {SessionView} from '@/lib/game/types';
 
 interface Cue {key:string;kicker:string;title:string;subtitle:string;}
-function cueFor(s:SessionView):Cue|undefined{
+export function cueFor(s:SessionView):Cue|undefined{
   if(['lobby','finished','ended'].includes(s.phase))return;
   if(s.phase==='tieTossup'||s.phase==='tieAnswer')
     return {key:'tie',kicker:'THE SHOWDOWN',title:'SUDDEN DEATH',subtitle:'One final Toss-Up decides the finalist'};
