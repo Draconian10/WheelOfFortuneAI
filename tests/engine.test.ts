@@ -26,6 +26,15 @@ function spinAndSettle(s:GameState,user=PLAYERS[0],index=0){
   reconcile(next,started.spinEndsAt!+1);
   return next;
 }
+function bonusSpinAndSettle(state:GameState,user=PLAYERS[0],index=0){
+  const started=send(state,{type:'spinBonus'},user,index);
+  expect(started.phase).toBe('bonusSpinning');
+  expect(started.spinEndsAt).toBe(started.spin!.startedAt!+SPIN_DURATION_MS);
+  const settled=structuredClone(started);
+  reconcile(settled,started.spinEndsAt!+1);
+  expect(settled.phase).toBe('bonusCategory');
+  return settled;
+}
 function joined(){
   let s=newSession(starterGame(),'00000000-0000-4000-8000-000000000010',HOST,'030405',START,CONTROLLER);
   for(let i=0;i<3;i++)s=send(s,{type:'join',name:['Alice','Bob','Charlie'][i]},PLAYERS[i]);
@@ -116,7 +125,7 @@ describe('wheel scoring',()=>{
     expect(s.currentPlayerId).toBe(PLAYERS[1]);
   });
   it('offers Mystery cash or a separately secured prize',()=>{
-    let s=regular();s.roundIndex=2;
+    let s=regular();s.roundIndex=2;s.mysteryPrizeIndex=5;
     s=spinAndSettle(s,PLAYERS[0],5);
     s=send(s,{type:'letter',letter:'N'},PLAYERS[0]);
     expect(s.phase).toBe('mysteryChoice');
@@ -135,7 +144,7 @@ describe('wheel scoring',()=>{
 describe('bonus round and host control',()=>{
   it('uses RSTLNE plus 3 consonants and one vowel, awards the prize after a solve',()=>{
     let s=regular();s.phase='bonusSpin';s.bonusPlayerId=PLAYERS[0];
-    s=send(s,{type:'spinBonus'},PLAYERS[0],0);
+    s=bonusSpinAndSettle(s,PLAYERS[0],0);
     expect(s.phase).toBe('bonusCategory');
     s=send(s,{type:'chooseBonus',index:0},PLAYERS[0],0);
     for(const letter of ['B','C','D','A'])s=send(s,{type:'bonusLetter',letter},PLAYERS[0]);
@@ -211,7 +220,7 @@ describe('judgment corrections',()=>{
   });
   it('keeps the selected bonus prize concealed until the final reveal',()=>{
     let s=regular();s.phase='bonusSpin';s.bonusPlayerId=PLAYERS[0];
-    s=send(s,{type:'spinBonus'},PLAYERS[0],0);
+    s=bonusSpinAndSettle(s,PLAYERS[0],0);
     const host=viewSession(s,HOST,START,CONTROLLER);
     const player=viewSession(s,PLAYERS[0],START);
     expect(host.bonusPrize).toBeUndefined();
@@ -219,7 +228,7 @@ describe('judgment corrections',()=>{
   });
   it('allows the host to reverse an incorrect bonus judgment',()=>{
     let s=regular();s.phase='bonusSpin';s.bonusPlayerId=PLAYERS[0];
-    s=send(s,{type:'spinBonus'},PLAYERS[0],0);
+    s=bonusSpinAndSettle(s,PLAYERS[0],0);
     s=send(s,{type:'chooseBonus',index:0},PLAYERS[0]);
     for(const letter of ['B','C','D','A'])s=send(s,{type:'bonusLetter',letter},PLAYERS[0]);
     s=send(s,{type:'startBonus'});
@@ -550,7 +559,7 @@ describe('Million Dollar Wedge qualification',()=>{
     let s=collect();
     s=send(s,{type:'hostSolve',playerId:PLAYERS[0]});
     s.phase='bonusSpin';s.bonusPlayerId=PLAYERS[0];
-    s=send(s,{type:'spinBonus'},PLAYERS[0],4);
+    s=bonusSpinAndSettle(s,PLAYERS[0],4);
     expect(s.bonusEnvelopeIndex).toBe(4);
     s=send(s,{type:'chooseBonus',index:0},PLAYERS[0]);
     for(const letter of ['B','C','D','A'])s=send(s,{type:'bonusLetter',letter},PLAYERS[0]);
@@ -563,7 +572,7 @@ describe('Million Dollar Wedge qualification',()=>{
     unqualified=send(unqualified,{type:'solve',text:'INCORRECT'},PLAYERS[0]);
     unqualified=send(unqualified,{type:'hostSolve',playerId:PLAYERS[1]});
     unqualified.phase='bonusSpin';unqualified.bonusPlayerId=PLAYERS[0];
-    unqualified=send(unqualified,{type:'spinBonus'},PLAYERS[0],4);
+    unqualified=bonusSpinAndSettle(unqualified,PLAYERS[0],4);
     unqualified=send(unqualified,{type:'chooseBonus',index:0},PLAYERS[0]);
     for(const letter of ['B','C','D','A'])unqualified=send(unqualified,{type:'bonusLetter',letter},PLAYERS[0]);
     unqualified=send(unqualified,{type:'startBonus'});
@@ -628,7 +637,7 @@ describe('Wild Card retention, in-round extra consonant, and forfeiture',()=>{
   it('permits an extra Bonus Round consonant when the Wild Card survived',()=>{
     let s=collectWild();
     s.phase='bonusSpin';s.bonusPlayerId=PLAYERS[0];
-    s=send(s,{type:'spinBonus'},PLAYERS[0],0);
+    s=bonusSpinAndSettle(s,PLAYERS[0],0);
     s=send(s,{type:'chooseBonus',index:0},PLAYERS[0]);
     for(const letter of ['B','C','D','G','A'])s=send(s,{type:'bonusLetter',letter},PLAYERS[0]);
     expect(s.bonusLetters).toHaveLength(5);
@@ -823,7 +832,7 @@ describe('session action journal is private and reflects the correct puzzle',()=
 describe('server-enforced host control for gameplay commands',()=>{
   it('only permits the controlling host to start the Bonus Round',()=>{
     let s=regular();s.phase='bonusSpin';s.bonusPlayerId=PLAYERS[0];
-    s=send(s,{type:'spinBonus'},PLAYERS[0],0);
+    s=bonusSpinAndSettle(s,PLAYERS[0],0);
     s=send(s,{type:'chooseBonus',index:0},PLAYERS[0]);
     for(const letter of ['B','C','D','A'])s=send(s,{type:'bonusLetter',letter},PLAYERS[0]);
     expect(()=>send(s,{type:'startBonus'},PLAYERS[0])).toThrow('Only the host');
