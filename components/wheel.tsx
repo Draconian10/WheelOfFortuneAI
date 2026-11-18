@@ -1,7 +1,7 @@
 'use client';
 import {useEffect,useId,useRef,useState} from 'react';
-import type {RoundKind,Spin,Wedge} from '@/lib/game/types';
-import {wheelForRound} from '@/lib/game/wheel';
+import type {RoundKind,Spin,Wedge,MysteryReveal} from '@/lib/game/types';
+import {wheelForRound,bonusWheelWedges} from '@/lib/game/wheel';
 
 function polar(cx:number,cy:number,r:number,degrees:number){
   const a=(degrees-90)*Math.PI/180;
@@ -24,10 +24,11 @@ function wedgeLabelSize(label:string){
   if(label.length>4)return 37;
   return 43;
 }
-export default function Wheel({kind,spin,compact=false,onSpinSettled}:{
+export default function Wheel({kind,spin,compact=false,onSpinSettled,bonus=false,mysteryReveals=[]}:{
   kind:RoundKind;spin?:Spin;compact?:boolean;onSpinSettled?:(id:string)=>void;
+  bonus?:boolean;mysteryReveals?:MysteryReveal[];
 }){
-  const wedges=wheelForRound(kind);
+  const wedges=bonus?bonusWheelWedges():wheelForRound(kind,mysteryReveals);
   const uid=useId().replace(/:/g,'');
   const [rotation,setRotation]=useState(0);
   const [spinning,setSpinning]=useState(false);
@@ -71,7 +72,7 @@ export default function Wheel({kind,spin,compact=false,onSpinSettled}:{
     return()=>{cancelAnimationFrame(frame);clearTimeout(fallback);};
   },[spin?.id,spin?.index]);
 
-  return <div className={'wheel-assembly'+(compact?' wheel-compact':'')}>
+  return <div className={'wheel-assembly'+(compact?' wheel-compact':'')+(bonus?' wheel-bonus':'')}>
     <span className="wheel-pointer" aria-hidden="true"/>
     <div className="wheel-disc" style={{
       transform:'rotate('+rotation+'deg)',
@@ -80,7 +81,7 @@ export default function Wheel({kind,spin,compact=false,onSpinSettled}:{
       if(e.target===e.currentTarget&&spin)settle(spin.id);
     }}>
       <svg viewBox="0 0 700 700" role="img"
-        aria-label="Twenty-four-segment Wheel of Fortune prize wheel with vivid cash wedges and a large readable center logo">
+        aria-label={bonus?'Bonus Wheel with 24 numbered sealed envelopes':'Twenty-four-segment Wheel of Fortune prize wheel with colorful cash and specialty wedges'}>
         <defs>
           <filter id={'wheelInk'+uid} x="-40%" y="-40%" width="180%" height="180%">
             <feDropShadow dx="1" dy="2" stdDeviation="1.4" floodColor="#000" floodOpacity=".65"/>
@@ -93,6 +94,7 @@ export default function Wheel({kind,spin,compact=false,onSpinSettled}:{
         {wedges.map((w,i)=>{
           const label=radialLabel(w);
           const lightText=w.kind==='bankrupt'||w.kind==='lose';
+          const prizeClaimed=!bonus&&mysteryReveals.some(entry=>entry.index===i&&entry.outcome==='prize');
           return <g key={i} transform={'rotate('+(i*15)+' 350 350)'}>
             <path d={sector(0)} fill={w.color} stroke="#090b0d" strokeWidth="1.5"/>
             <text x="350" y="104" textAnchor="middle" dominantBaseline="central"
@@ -105,9 +107,21 @@ export default function Wheel({kind,spin,compact=false,onSpinSettled}:{
               strokeWidth={lightText?1.2:1.6} strokeLinejoin="round"
               fill={lightText?'#ffffff':'#050607'}
               filter={'url(#wheelInk'+uid+')'}>{label}</text>
+            {prizeClaimed&&<text x="350" y="54" textAnchor="middle"
+              fontFamily="Arial Black, sans-serif" fontWeight="900" fontSize="17"
+              transform="rotate(90 350 54)" fill="#fff" stroke="#251005"
+              strokeWidth="2.4" paintOrder="stroke">10K WON</text>}
           </g>;
         })}
-        {/* In the source wheel the lime-green rim frames a black logo medallion. */}
+        {/* Center artwork changes with the actual wheel being spun. */}
+        {bonus?<>
+          <circle cx="350" cy="350" r="148" fill="#111f4c" stroke="#e3be71" strokeWidth="18"/>
+          <circle cx="350" cy="350" r="126" fill="none" stroke="#f6e7bd" strokeWidth="3"/>
+          <text x="350" y="339" textAnchor="middle" fill="#fff1b9" fontSize="56"
+            fontWeight="900" fontFamily="Arial Black, Impact, sans-serif">BONUS</text>
+          <text x="350" y="388" textAnchor="middle" fill="#eef4ff" fontSize="42"
+            fontWeight="900" fontFamily="Arial Black, Impact, sans-serif">WHEEL</text>
+        </>:<>
         <circle cx="350" cy="350" r="146" fill="#050507" stroke="#0bd51c" strokeWidth="19"/>
         <circle cx="350" cy="350" r="132" fill="none" stroke="#ffffff" strokeWidth="3"/>
         <circle cx="350" cy="350" r="78" fill="#ffffff" stroke="#e8edf0" strokeWidth="3"/>
@@ -134,8 +148,9 @@ export default function Wheel({kind,spin,compact=false,onSpinSettled}:{
         </g>
         <circle cx="239" cy="350" r="6.5" fill="#fff"/>
         <circle cx="461" cy="350" r="6.5" fill="#fff"/>
+        </>}
       </svg>
     </div>
-    {spin&&<div className="wheel-result" aria-live="polite">{settledId===spin.id?spin.wedge.label:'SPINNING…'}</div>}
+    {spin&&<div className="wheel-result" aria-live="polite">{settledId===spin.id?(bonus?'ENVELOPE '+spin.wedge.label:spin.wedge.label):'SPINNING…'}</div>}
   </div>;
 }
