@@ -62,7 +62,7 @@ function LiveSession({id,role,displayToken}:{
   const wedgeInfo=!!s&&!spinPendingVisual&&s.phase!=='spinning'&&
     (s.pendingSpin?.wedge||(/landed on|hit BANKRUPT|Wild Card collected|Million Dollar Wedge collected/i.test(s.lastAction??'')
       ?s.spin?.wedge:undefined));
-  const canSpeedupBuzz=!!s&&s.phase==='speedup'&&s.speedupCanSolve&&
+  const canSpeedupBuzz=!!s&&s.phase==='speedup'&&!!s.speedupCanSolve&&
     !!s.windowId&&remaining>0&&canAct;
   const canBuzz=!!s&&player&&connected&&!busy&&!s.paused&&
     ['tossup','tieTossup'].includes(s.phase)&&remaining>0&&!!s.windowId&&
