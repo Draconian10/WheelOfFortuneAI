@@ -52,8 +52,12 @@ function LiveSession({id,role,displayToken}:{
   const [joinUrl,setJoinUrl]=useState(''),[copied,setCopied]=useState(false);
   const [sound,setSound]=useState(false);
   const [settledSpinId,setSettledSpinId]=useState('');
+  // In Speed-Up, an accepted correct letter (or answer buzz) must never
+  // be blocked by a wheel animation whose callback did not run in a reconnected
+  // or backgrounded tab. The server has already settled the Final Spin wedge.
   const spinPendingVisual=!!s?.spin?.startedAt&&
-    ['spinning','finalSpinning','turn','letter','wildLetter','mysteryChoice','expressChoice','express','speedup','speedupAnswer'].includes(s.phase)&&
+    ['spinning','finalSpinning','turn','letter','wildLetter','mysteryChoice','expressChoice','express','speedup'].includes(s.phase)&&
+    !(s.phase==='speedup'&&s.speedupCanSolve)&&
     s.spin.id!==settledSpinId;
   const me=s?.players.find(p=>p.id===userId),active=s?.players.find(p=>p.id===s.currentPlayerId);
   const respondent=s?.players.find(p=>p.id===s.respondent);
