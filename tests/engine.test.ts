@@ -702,7 +702,7 @@ describe('tiebreaker uses its own reveal epoch',()=>{
   });
 });
 
-describe('Final Spin: buzz within three seconds, then answer without a timer',()=>{
+describe('Final Spin: buzz within ten seconds, then answer without a timer',()=>{
   function speedup(){
     let s=regular();s.roundIndex=5;s.hostSeen=START+150000;
     s=send(s,{type:'speedUp'},HOST,0);
@@ -718,10 +718,11 @@ describe('Final Spin: buzz within three seconds, then answer without a timer',()
     expect(next.phase).toBe('speedup');
     expect(next.speedupCanSolve).toBe(true);
     expect(next.windowId).toBeTruthy();
-    expect(next.deadline!-next.updatedAt).toBe(SPEEDUP_SOLVE_MS);
+    expect(SPEEDUP_SOLVE_MS).toBe(10000);
+    expect(next.deadline!-next.updatedAt).toBe(10000);
     return next;
   }
-  it('grants a three-second buzz window and advances when no player buzzes',()=>{
+  it('grants a ten-second buzz window and advances when no player buzzes',()=>{
     let s=speedup();
     expect(()=>send(s,{type:'hostSolve',playerId:PLAYERS[0]})).toThrow('not available');
     expect(()=>send(s,{type:'solve',text:'CHOCOLATE CHIP PANCAKES'},PLAYERS[0])).toThrow('not available');
@@ -740,7 +741,7 @@ describe('Final Spin: buzz within three seconds, then answer without a timer',()
     expect(s.players[0].roundMoney).toBeGreaterThan(0);
     expect(s.lastAction).toContain('buzz window expired');
   });
-  it('permits an on-time buzz, then submits the complete solution long after three seconds',()=>{
+  it('permits an on-time buzz, then submits the complete solution long after ten seconds',()=>{
     let s=letterOpensBuzz(speedup());
     const deadline=s.deadline!,windowId=s.windowId!;
     expect(()=>send(s,{type:'speedupBuzz',windowId},PLAYERS[1],0,deadline-100)).toThrow('Wait for your turn');
