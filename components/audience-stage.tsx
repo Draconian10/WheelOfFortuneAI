@@ -79,7 +79,7 @@ export default function AudienceStage({s,remaining}:{s:SessionView;remaining:num
           spinning?'The wheel decides the final cash value':
           isBonus?'The prize envelope stays sealed':
           s.phase==='speedupAnswer'?((nowPlaying?.name??'The contestant')+' buzzed in — answering without a countdown'):
-          s.phase==='speedup'?'Three seconds to buzz after a correct letter':
+          s.phase==='speedup'?'Ten seconds to buzz after a correct letter':
           nowPlaying?nowPlaying.name+' has the wheel':'The wheel is ready'}</p>
       </div>}
     </div>
