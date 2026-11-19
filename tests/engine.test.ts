@@ -1233,3 +1233,53 @@ describe('physical Bonus Wheel slot-to-prize mapping',()=>{
     expect(viewSession(s,PLAYERS[1],s.updatedAt).bonusPrize?.value).toBe(50000);
   });
 });
+
+describe('fresh round announcements and ten-second Final Spin buzz',()=>{
+  it('replaces the previous solution ticker when a regular round advances',()=>{
+    let s=regular();
+    s.players[0].roundMoney=500;
+    s=send(s,{type:'hostSolve',playerId:PLAYERS[0]});
+    expect(s.lastAction).toContain('solved the puzzle');
+    s=send(s,{type:'nextRound'});
+    expect(s.roundIndex).toBe(2);
+    expect(s.phase).toBe('turn');
+    expect(s.lastAction).toContain('Mystery');
+    expect(s.lastAction).toContain('begins');
+    expect(s.lastAction).not.toContain('solved the puzzle');
+    expect(s.roundBeganAt).toBe(s.updatedAt);
+    expect(viewSession(s,PLAYERS[0],s.updatedAt).roundBeganAt).toBe(s.roundBeganAt);
+  });
+  it('announces the new Triple Toss-Up and Bonus Finale instead of repeating an old result',()=>{
+    let s=regular();
+    s.roundIndex=3;s.phase='roundResult';s.lastAction='Previous prize solver won!';
+    s=send(s,{type:'nextRound'});
+    expect(s.roundIndex).toBe(4);
+    expect(s.phase).toBe('tossup');
+    expect(s.lastAction).toContain('Triple');
+    expect(s.lastAction).not.toContain('Previous prize solver');
+    expect(s.roundBeganAt).toBe(s.updatedAt);
+
+    s.roundIndex=5;s.phase='roundResult';s.players[0].banked=9000;
+    for(const p of s.players.slice(1))p.banked=0;
+    s.lastAction='Final Spin was solved!';
+    s=send(s,{type:'nextRound'});
+    expect(s.phase).toBe('bonusSpin');
+    expect(s.lastAction).toContain('Bonus Round begins');
+    expect(s.lastAction).not.toContain('Final Spin was solved');
+    expect(s.roundBeganAt).toBe(s.updatedAt);
+  });
+  it('does not open the Final Spin answer before buzzing, and respects the 10-second cutoff',()=>{
+    let s=regular();s.roundIndex=5;s.hostSeen=START+150000;
+    s=send(s,{type:'speedUp'},HOST,0);
+    reconcile(s,s.spinEndsAt!+1);
+    s=send(s,{type:'letter',letter:'C'},PLAYERS[0]);
+    expect(SPEEDUP_SOLVE_MS).toBe(10000);
+    expect(s.deadline!-s.updatedAt).toBe(10000);
+    const deadline=s.deadline!,windowId=s.windowId!;
+    s=send(s,{type:'speedupBuzz',windowId},PLAYERS[0],0,deadline-1);
+    expect(s.phase).toBe('speedupAnswer');
+    expect(s.deadline).toBeUndefined();
+    s=send(s,{type:'solve',text:'CHOCOLATE CHIP PANCAKES'},PLAYERS[0],0,deadline+120000);
+    expect(s.phase).toBe('roundResult');
+  });
+});
