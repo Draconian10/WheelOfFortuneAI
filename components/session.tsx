@@ -361,7 +361,7 @@ function LiveSession({id,role,displayToken}:{
                     if(s.windowId)doSend({type:'speedupBuzz',windowId:s.windowId});
                   }}/>}
                 </div>}
-              </>
+              </>}
               {s.phase==='speedupAnswer'&&<>
                 <h3>Final Spin · Answer claimed!</h3>
                 <p className="muted">{active?.name} buzzed in on time. The countdown is stopped — take your time entering the full solution. An incorrect answer passes control to the next contestant.</p>
