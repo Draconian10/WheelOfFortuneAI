@@ -4,6 +4,19 @@ import {Sparkles} from 'lucide-react';
 import type {SessionView} from '@/lib/game/types';
 
 interface Cue {key:string;kicker:string;title:string;subtitle:string;}
+const INTRO_DURATION_MS=3200;
+const MAX_LIVE_ARRIVAL_MS=1500;
+
+/** A stage transition is a live cue, not a replayable part of saved game state.
+ * Stale refreshes and reconnections should go straight to the current puzzle. */
+export function isFreshRoundCue(s:SessionView,foregroundAt=0,clientNow=Date.now()){
+  if(s.roundBeganAt===undefined)return false;
+  const age=s.serverNow-s.roundBeganAt;
+  if(age<0||age>MAX_LIVE_ARRIVAL_MS)return false;
+  // Translate the locally recorded foreground instant to the server clock.
+  const foregroundServerTime=foregroundAt+s.serverNow-clientNow;
+  return foregroundAt===0||s.roundBeganAt>=foregroundServerTime-80;
+}
 export function cueFor(s:SessionView):Cue|undefined{
   if(['lobby','finished','ended'].includes(s.phase))return;
   if(s.phase==='tieTossup'||s.phase==='tieAnswer')
@@ -25,15 +38,39 @@ export function cueFor(s:SessionView):Cue|undefined{
 export default function RoundTransition({s}:{s:SessionView}){
   const next=cueFor(s);
   const prior=useRef<string|undefined>(undefined);
+  const foregroundAt=useRef(0);
   const [active,setActive]=useState<Cue|undefined>();
+  useLayoutEffect(()=>{
+    // When a phone returns to the app, old round transitions are discarded.
+    // A future round that begins while the phone is visible still animates.
+    const onVisibility=()=>{
+      setActive(undefined);
+      if(document.visibilityState==='visible')foregroundAt.current=Date.now();
+    };
+    const onFocus=()=>{
+      setActive(undefined);
+      if(document.visibilityState==='visible')foregroundAt.current=Date.now();
+    };
+    document.addEventListener('visibilitychange',onVisibility);
+    window.addEventListener('pageshow',onFocus);
+    window.addEventListener('focus',onFocus);
+    return()=>{
+      document.removeEventListener('visibilitychange',onVisibility);
+      window.removeEventListener('pageshow',onFocus);
+      window.removeEventListener('focus',onFocus);
+    };
+  },[]);
   useLayoutEffect(()=>{
     const id=next?.key??s.phase;
     if(prior.current===undefined){prior.current=id;return;}
     if(prior.current===id)return;
     prior.current=id;
-    if(!next){setActive(undefined);return;}
+    if(!next||document.visibilityState!=='visible'||
+      !isFreshRoundCue(s,foregroundAt.current)){
+      setActive(undefined);return;
+    }
     setActive(next);
-    const timer=setTimeout(()=>setActive(current=>current?.key===next.key?undefined:current),3200);
+    const timer=setTimeout(()=>setActive(current=>current?.key===next.key?undefined:current),INTRO_DURATION_MS);
     return()=>clearTimeout(timer);
   },[next?.key]);
   if(!active)return null;

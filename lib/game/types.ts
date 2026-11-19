@@ -81,6 +81,8 @@ export interface GameState {
   closedInLobby?: boolean;
   roundIndex: number;
   puzzleIndex: number;
+  /** Server timestamp of the current round entrance, not a client animation clock. */
+  roundBeganAt?: number;
   players: Player[];
   currentPlayerId?: string;
   roundStarterId?: string;
@@ -143,7 +145,7 @@ export interface SessionView {
   id: string; gameId: string; title: string; joinCode: string;
   phase: Phase; version: number; actionVersion: number;
   closedInLobby?: boolean;
-  roundIndex: number; totalRounds: number; roundTitle: string; roundKind: RoundKind | 'bonus' | 'tie';
+  roundIndex: number; totalRounds: number; roundBeganAt?: number; roundTitle: string; roundKind: RoundKind | 'bonus' | 'tie';
   puzzleIndex: number; puzzlesInRound: number;
   puzzle: { category: string; tiles: string[]; answer?: string; hint?: string };
   players: Player[];

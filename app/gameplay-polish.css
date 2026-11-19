@@ -1,0 +1,70 @@
+/* Shared broadcast-grade buzzer and compact Final Spin solve stage. */
+.buzzer.game-show-buzzer{
+  isolation:isolate;position:relative;display:grid;place-items:center;flex-shrink:0;
+  width:clamp(210px,26vw,254px);height:clamp(210px,26vw,254px);
+  padding:18px;border:8px solid #ffe7ac;border-radius:50%;
+  background:radial-gradient(circle at 35% 22%,#ffbbcf 0%,#f1668f 27%,#d02e64 59%,#851d53 100%);
+  color:#fff8ec;outline:5px solid #253c79;outline-offset:3px;
+  box-shadow:0 11px 0 #76204e,0 21px 36px #050d2d99,
+    0 0 0 13px #f2be6850,inset 0 8px 17px #fff7e066;
+  cursor:pointer;transition:transform .16s ease,filter .2s ease;
+  font-family:'Barlow Condensed',Impact,sans-serif;
+}
+.buzzer.game-show-buzzer::before{content:'';position:absolute;inset:9px;z-index:-1;
+  border:2px solid #ffebbeaf;border-radius:50%;box-shadow:inset 0 0 20px #580b4377}
+.game-show-buzzer-inner{display:flex;align-items:center;justify-content:center;flex-direction:column;gap:4px}
+.game-show-buzzer-live{font:900 .7rem/1.1 system-ui,sans-serif;letter-spacing:.19em;
+  padding:4px 10px;border:1px solid #ffe9c5b0;border-radius:100px;
+  background:#812551a8;color:#fff2cc}
+.game-show-buzzer-bolt{color:#fff5ca;filter:drop-shadow(0 2px 8px #641139cc)}
+.buzzer.game-show-buzzer strong{font-size:clamp(2.9rem,5vw,3.8rem);
+  line-height:.95;letter-spacing:.055em;text-shadow:0 3px 0 #6c204e,0 5px 14px #551539}
+.game-show-buzzer-foot{font:900 .65rem/1.2 system-ui,sans-serif;
+  letter-spacing:.09em;color:#fff1d3;margin-top:5px}
+.buzzer.game-show-buzzer.ready{animation:game-show-buzzer-glow 1.7s ease-in-out infinite alternate}
+.buzzer.game-show-buzzer:hover:not(:disabled){filter:brightness(1.13);
+  transform:translateY(3px);box-shadow:0 7px 0 #76204e,0 14px 28px #050d2d9c,0 0 0 13px #f2be6880,inset 0 8px 17px #fff7e066}
+.buzzer.game-show-buzzer:active:not(:disabled){transform:translateY(8px);
+  box-shadow:0 3px 0 #76204e,0 9px 17px #050d2da0,0 0 0 13px #f2be6866}
+.buzzer.game-show-buzzer:focus-visible{outline:4px solid #fff;outline-offset:7px}
+.buzzer.game-show-buzzer:disabled{opacity:.58;cursor:not-allowed;filter:grayscale(.4);
+  animation:none}
+@keyframes game-show-buzzer-glow{from{box-shadow:0 11px 0 #76204e,0 21px 36px #050d2d99,
+  0 0 0 13px #f2be6840,inset 0 8px 17px #fff7e066}
+  to{box-shadow:0 11px 0 #76204e,0 21px 36px #050d2d99,
+    0 0 0 16px #f2be6890,0 0 36px #ef9da685,inset 0 8px 17px #fff7e066}}
+.tossup-stage .game-show-buzzer{margin:16px auto 8px}
+.wheel-game-grid.speedup-buzz-layout{grid-template-columns:minmax(0,1fr);justify-items:center}
+.wheel-game-grid.speedup-buzz-layout>.turn-panel{width:min(100%,850px);text-align:center}
+.speedup-buzz-layout .turn-person{justify-content:center}
+.speedup-buzz-layout .round-money{text-align:left}
+.speedup-buzz-layout .speedup-buzz-stage{display:flex;flex-direction:column;align-items:center;
+  gap:10px;padding:8px 0 12px}
+.speedup-buzz-stage .speedup-buzz-timer{width:min(100%,510px);margin:4px auto;
+  justify-content:center;gap:14px}
+.speedup-buzz-stage .game-show-buzzer{margin:15px auto}
+.speedup-buzz-stage>p{max-width:560px;line-height:1.5;margin:0 auto}
+.speedup-buzz-layout .host-private-answer{margin-top:8px}
+.host-private-answer,.host-private-answer[open]{
+  box-shadow:none;
+}
+.host-private-answer-content{
+  border-left:0;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;text-align:center;gap:8px;margin:0;
+  padding:8px 22px 22px;
+}
+.host-private-answer-response{text-align:center;width:100%;margin:0 auto;
+  font-size:clamp(1.6rem,2.4vw,2.1rem)}
+.host-private-answer-note{text-align:center}
+@media(max-width:540px){
+  .buzzer.game-show-buzzer{width:208px;height:208px;padding:13px}
+  .buzzer.game-show-buzzer strong{font-size:3rem}
+  .game-show-buzzer-bolt{width:40px;height:40px}
+  .game-show-buzzer-foot{font-size:.58rem}
+  .speedup-buzz-layout .round-money{width:100%}
+  .speedup-buzz-stage .speedup-buzz-timer{flex-direction:column;gap:7px}
+}
+@media(prefers-reduced-motion:reduce){
+  .buzzer.game-show-buzzer.ready{animation:none}
+  .buzzer.game-show-buzzer{transition:none}
+}

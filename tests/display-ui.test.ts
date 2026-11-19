@@ -7,8 +7,10 @@ import HostAnswer from '@/components/host-answer';
 import BonusReveal from '@/components/bonus-reveal';
 import WedgeHelp from '@/components/wedge-help';
 import AudienceStage from '@/components/audience-stage';
-import RoundTransition,{cueFor} from '@/components/round-transition';
+import RoundTransition,{cueFor,isFreshRoundCue} from '@/components/round-transition';
 import Wheel from '@/components/wheel';
+import GameBuzzer from '@/components/game-buzzer';
+import {readFileSync} from 'node:fs';
 import FinalSpinAnnouncement from '@/components/final-spin-announcement';
 import ScoreCorrections from '@/components/score-corrections';
 import {newSession,viewSession} from '@/lib/game/engine';
@@ -216,5 +218,44 @@ describe('broadcast Final Spin buzzer and untimed answer',()=>{
     expect(html).toContain('$1,900');
     expect(html).not.toContain('00:00');
     expect(html).not.toContain(s.definition.rounds[5].puzzles[0].answer);
+  });
+});
+describe('themed shared buzzer and reconnect-safe cinema',()=>{
+  it('renders a large reusable active buzzer for Toss-Up and Final Spin',()=>{
+    for(const context of ['tossup','speedup'] as const){
+      const html=renderToStaticMarkup(createElement(GameBuzzer,{
+        context,ready:true,onBuzz:()=>{}
+      }));
+      expect(html).toContain('game-show-buzzer');
+      expect(html).toContain('buzzer '+(context==='speedup'?'game-show-buzzer':'game-show-buzzer'));
+      expect(html).toContain('buzzer-'+context);
+      expect(html).toContain('aria-label="Buzz in to answer"');
+      expect(html).toContain('BUZZ!');
+      expect(html).not.toContain('disabled=""');
+    }
+    const waiting=renderToStaticMarkup(createElement(GameBuzzer,{
+      context:'speedup',ready:false,onBuzz:()=>{}
+    }));
+    expect(waiting).toContain('disabled=""');
+    expect(waiting).toContain('WAIT');
+  });
+  it('centers the private correct answer without the decorative gold divider',()=>{
+    const css=readFileSync('app/gameplay-polish.css','utf8');
+    expect(css).toMatch(/\.host-private-answer-content\s*\{[^}]*border-left:0/);
+    expect(css).toMatch(/\.host-private-answer-response\s*\{[^}]*text-align:center/);
+    expect(css).toContain('.buzzer.game-show-buzzer');
+    expect(css).toContain('.speedup-buzz-layout');
+  });
+  it('shows a cinematic only for a newly entered live round, not a delayed phone refresh',()=>{
+    const host='00000000-0000-4000-8000-000000000001';
+    const state=newSession(starterGame(),'00000000-0000-4000-8000-000000000010',host,'445566',1000);
+    state.phase='turn';state.roundIndex=2;state.roundBeganAt=4950;
+    const sample=viewSession(state,host,5100);
+    expect(isFreshRoundCue(sample,4900,5100)).toBe(true);
+    expect(isFreshRoundCue(sample,5060,5100)).toBe(false); // Returned after the round began.
+    expect(isFreshRoundCue({...sample,serverNow:15000},0,15000)).toBe(false); // Offline for 10s.
+    expect(isFreshRoundCue({...sample,roundBeganAt:undefined},0,5100)).toBe(false);
+    expect(isFreshRoundCue({...sample,roundBeganAt:5200},0,5100)).toBe(false);
+    expect(cueFor(sample)?.title).toBe('MYSTERY ROUND');
   });
 });
