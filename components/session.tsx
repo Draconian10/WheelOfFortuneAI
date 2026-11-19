@@ -26,6 +26,7 @@ import HostAnswer from './host-answer';
 import BonusReveal from './bonus-reveal';
 import WedgeHelp from './wedge-help';
 import RoundTransition from './round-transition';
+import GameBuzzer from './game-buzzer';
 import AudienceStage from './audience-stage';
 import FinalSpinAnnouncement from './final-spin-announcement';
 import ScoreCorrections from './score-corrections';
@@ -99,6 +100,7 @@ function LiveSession({id,role,displayToken}:{
   const doSend=(command:Command)=>{void send(command);};
   const isTossup=!!s&&['tossup','tossupAnswer','tieTossup','tieAnswer'].includes(s.phase);
   const isWheel=!!s&&['spinning','finalSpinning','turn','letter','wildLetter','mysteryChoice','expressChoice','express','speedup','speedupAnswer'].includes(s.phase);
+  const speedupBuzzActive=!!s&&s.phase==='speedup'&&s.speedupCanSolve;
   const isBonus=!!s&&['bonusCategory','bonusSpin','bonusSpinning','bonusLetters','bonusTimer','bonusResult'].includes(s.phase);
   const canSolve=!!s&&['turn','express','speedupAnswer','letter'].includes(s.phase)&&canAct&&
     (s.phase!=='letter'||s.pendingSpin?.wedge.kind==='free');
@@ -271,11 +273,10 @@ function LiveSession({id,role,displayToken}:{
             {s.phase==='tieTossup'||s.phase==='tossup'?
               <>
                 <h2>{s.phase==='tieTossup'?'Only the tied leaders can buzz!':'Know the phrase? Hit the buzzer!'}</h2>
-                {player&&<button className={'buzzer '+(canBuzz?'ready':'')}
-                  disabled={!canBuzz} onClick={()=>{
-                    if(navigator.vibrate)navigator.vibrate(35);
-                    if(s.windowId)doSend({type:'buzz',windowId:s.windowId});
-                  }}><Zap size={46} fill="currentColor"/><strong>{canBuzz?'BUZZ!':'WAIT'}</strong></button>}
+                {player&&<GameBuzzer ready={canBuzz} onBuzz={()=>{
+                  if(navigator.vibrate)navigator.vibrate(35);
+                  if(s.windowId)doSend({type:'buzz',windowId:s.windowId});
+                }}/>} 
                 <p className="muted">{player?(s.attempted.includes(userId)?'You have already attempted this puzzle.':
                   canBuzz?'Tap to claim your chance to solve.':'Waiting for the host or another contestant.'):
                   'Letters appear automatically. Buzzers close after the first accepted press.'}</p>
@@ -293,10 +294,10 @@ function LiveSession({id,role,displayToken}:{
                 {player&&<div className="buzz-answer">{s.respondent===userId?'YOU ARE UP!':'Watching '+respondent?.name+' answer'}</div>}
               </>}
           </section>}
-          {isWheel&&<div className="wheel-game-grid">
-            <div className="wheel-area"><Wheel kind={wheelKind} spin={s.spin} mysteryReveals={s.mysteryReveals} onSpinSettled={setSettledSpinId}/>
+          {isWheel&&<div className={'wheel-game-grid'+(speedupBuzzActive?' speedup-buzz-layout':'')}>
+            {!speedupBuzzActive&&<div className="wheel-area"><Wheel kind={wheelKind} spin={s.spin} mysteryReveals={s.mysteryReveals} onSpinSettled={setSettledSpinId}/>
               {s.speedupValue!==undefined&&!spinPendingVisual&&<p className="speedup-banner">FINAL SPIN · {money(s.speedupValue)} per consonant</p>}
-            </div>
+            </div>}
             <section className="panel turn-panel">
               <div className="eyebrow">CURRENT TURN</div>
               <div className="turn-person"><span className={'avatar seat-'+(active?.seat??0)}>{active?.name.slice(0,1)}</span>
@@ -349,19 +350,18 @@ function LiveSession({id,role,displayToken}:{
                 {choices(undefined,true)}{solveButton}
               </>}
               {s.phase==='speedup'&&<>
-                <h3>Final Spin · One letter at a time</h3>
-                {!s.speedupCanSolve?choices(undefined):<>
-                  <div className="speedup-solve-clock" role="status" aria-live="off">
-                    <span>Three seconds to buzz</span>{clock}
+                <h3>{s.speedupCanSolve?'Final Spin · Buzz for the answer!':'Final Spin · One letter at a time'}</h3>
+                {!s.speedupCanSolve?choices(undefined):<div className="speedup-buzz-stage">
+                  <div className="speedup-solve-clock speedup-buzz-timer" role="status" aria-live="off">
+                    <span>Ten seconds to buzz</span>{clock}
                   </div>
-                  <p className="muted">Buzz within three seconds to claim your solution attempt. You can then take as long as you need to type the full answer.</p>
-                  {(player||control)&&<button className="button primary full speedup-buzz-button"
-                    disabled={!canSpeedupBuzz} onClick={()=>{
-                      if(navigator.vibrate)navigator.vibrate(35);
-                      if(s.windowId)doSend({type:'speedupBuzz',windowId:s.windowId});
-                    }}><Zap size={20} fill="currentColor"/> {canSpeedupBuzz?'BUZZ TO ANSWER':'WAIT FOR YOUR TURN'}</button>}
-                </>}
-              </>}
+                  <p className="muted">Buzz within ten seconds to claim your answer. Once you buzz, the typing clock stops and you can enter the entire solution.</p>
+                  {(player||control)&&<GameBuzzer context="speedup" ready={canSpeedupBuzz} onBuzz={()=>{
+                    if(navigator.vibrate)navigator.vibrate(35);
+                    if(s.windowId)doSend({type:'speedupBuzz',windowId:s.windowId});
+                  }}/>}
+                </div>}
+              </>
               {s.phase==='speedupAnswer'&&<>
                 <h3>Final Spin · Answer claimed!</h3>
                 <p className="muted">{active?.name} buzzed in on time. The countdown is stopped — take your time entering the full solution. An incorrect answer passes control to the next contestant.</p>
