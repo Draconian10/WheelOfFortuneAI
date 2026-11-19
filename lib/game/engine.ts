@@ -7,7 +7,7 @@ export const HOST_GRACE_MS = 30000;
 export const TOSSUP_MS = 30000;
 export const SPIN_DURATION_MS = 4200;
 /** Show-style interval for a solve after a successful Speed-Up letter. */
-export const SPEEDUP_SOLVE_MS = 3000;
+export const SPEEDUP_SOLVE_MS = 10000;
 /** Live sessions support one to five contestants; a full lobby is never required to begin. */
 export const MIN_PLAYERS = 1;
 export const MAX_PLAYERS = 5;
@@ -89,7 +89,7 @@ function finishRound(s:GameState){
   s.speedupCanSolve=false;s.wildCardValue=undefined;
 }
 function setRound(s:GameState,ctx:Context){
-  resetPuzzle(s);s.deadline=undefined;s.remaining=undefined;s.speedupValue=undefined;s.frenzyRemaining=undefined;
+  resetPuzzle(s);s.roundBeganAt=ctx.now;s.deadline=undefined;s.remaining=undefined;s.speedupValue=undefined;s.frenzyRemaining=undefined;
   // The same two mystery wedges retain their secret outcomes for the whole round.
   // Reveal commands never reroll an outcome. Other rounds clear that secret.
   s.mysteryPrizeIndex=currentRound(s)?.kind==='mystery'
@@ -111,6 +111,10 @@ function setRound(s:GameState,ctx:Context){
     const offset=['regular','mystery','prize'].includes(round.kind)?s.roundIndex-1:0;
     s.phase='turn';s.currentPlayerId=players[(base+offset)%players.length].id;
   }
+  // Never carry the previous round's solve/timeout ticker into a new round.
+  s.lastAction=round.kind==='tossup'||round.kind==='triple'
+    ?round.title+' is starting! Get ready to buzz in.'
+    :round.title+' begins! '+(players.find(p=>p.id===s.currentPlayerId)?.name??'The next contestant')+' starts the round.';
 }
 function advanceTossup(s:GameState,ctx:Context){
   const round=currentRound(s);
@@ -128,6 +132,7 @@ function completedTossup(s:GameState,ctx:Context,player:Player){
   const round=currentRound(s);
   if(s.phase==='tieAnswer'){
     s.bonusPlayerId=player.id;s.tieEligible=undefined;s.phase='bonusSpin';s.spin=undefined;
+    s.roundBeganAt=ctx.now;s.lastAction='Bonus Round begins! '+player.name+' is the finalist.';
     s.deadline=undefined;s.windowId=undefined;s.respondent=undefined;
     return;
   }
@@ -172,7 +177,7 @@ function bankPuzzle(s:GameState,ctx:Context,p:Player){
 }
 function startTiebreaker(s:GameState,ctx:Context,leaders:Player[]){
   resetPuzzle(s);s.tieEligible=leaders.map(p=>p.id);
-  s.phase='tieTossup';s.windowId=crypto.randomUUID();
+  s.phase='tieTossup';s.roundBeganAt=ctx.now;s.windowId=crypto.randomUUID();
   s.puzzleStartedAt=ctx.now;
   s.deadline=ctx.now+TOSSUP_MS;s.remaining=TOSSUP_MS;
   s.lastAction='Sudden-death Toss-Up! A fresh 30-second puzzle begins.';
@@ -211,7 +216,7 @@ function expire(s:GameState,ctx:Context){
     s.remaining=TOSSUP_MS;s.attempted=[];s.revealed=[];
     s.puzzleStartedAt=ctx.now;
   }else if(s.phase==='speedup'&&s.speedupCanSolve){
-    s.lastAction='The three-second buzz window expired. Next contestant.';
+    s.lastAction='The ten-second buzz window expired. Next contestant.';
     nextPlayer(s);
   }else if(s.phase==='tossup'){
     if(s.roundIndex===0&&s.definition.opening==='frenzy'){
@@ -466,7 +471,9 @@ export function applyCommand(original:GameState,command:Command,ctx:Context):Gam
         const players=activePlayers(s),high=Math.max(...players.map(total)),leaders=players.filter(p=>total(p)===high);
         if(leaders.length>1){
           startTiebreaker(s,ctx,leaders);
-        }else{resetPuzzle(s);s.bonusPlayerId=leaders[0].id;s.phase='bonusSpin';}
+        }else{resetPuzzle(s);s.bonusPlayerId=leaders[0].id;s.phase='bonusSpin';
+          s.roundBeganAt=ctx.now;
+          s.lastAction='Bonus Round begins! '+leaders[0].name+' is the finalist.';}
       }else{
         s.roundIndex++;s.puzzleIndex=0;setRound(s,ctx);
       }
@@ -541,7 +548,7 @@ export function applyCommand(original:GameState,command:Command,ctx:Context):Gam
       if(s.phase==='speedup'){
         if(!vowel)p.roundMoney+=(s.speedupValue??0)*count;
         // A fully revealed board completes the round immediately. Otherwise,
-        // the contestant has 3 seconds to *buzz*, not to finish typing.
+        // the contestant has 10 seconds to *buzz*, not to finish typing.
         const answerLetters=[...new Set(currentPuzzle(s).answer.toUpperCase().match(/[A-Z]/g)??[])];
         if(answerLetters.every(c=>s.revealed.includes(c))){
           bankPuzzle(s,ctx,p);
@@ -551,7 +558,7 @@ export function applyCommand(original:GameState,command:Command,ctx:Context):Gam
         s.speedupCanSolve=true;
         s.windowId=crypto.randomUUID();
         s.deadline=ctx.now+SPEEDUP_SOLVE_MS;s.remaining=SPEEDUP_SOLVE_MS;
-        s.lastAction=letter+' appears '+count+' time(s). Three seconds to buzz for a solution!';
+        s.lastAction=letter+' appears '+count+' time(s). Ten seconds to buzz for a solution!';
         break;
       }
       if(!vowel){
@@ -623,7 +630,7 @@ export function applyCommand(original:GameState,command:Command,ctx:Context):Gam
       phase('speedup');
       const p=mustBeActive(s,ctx);
       ensure(s.speedupCanSolve&&!!s.deadline&&ctx.now<s.deadline,
-        'The three-second buzz window has expired.',409);
+        'The ten-second buzz window has expired.',409);
       ensure(!!s.windowId&&command.windowId===s.windowId,
         'This buzz window is no longer active.',409);
       s.phase='speedupAnswer';
@@ -836,7 +843,7 @@ export function viewSession(s:GameState,userId:string,now:number,controller?:str
     id:s.id,gameId:s.gameId,title:s.title,joinCode:s.joinCode,phase:s.phase,
     closedInLobby:s.closedInLobby,
     version:s.version,actionVersion:s.actionVersion,
-    roundIndex:s.roundIndex,totalRounds:s.definition.rounds.length,
+    roundIndex:s.roundIndex,totalRounds:s.definition.rounds.length,roundBeganAt:s.roundBeganAt,
     roundTitle:extra?'Bonus Round':(s.phase==='tieTossup'||s.phase==='tieAnswer'?'Sudden-Death Toss-Up':round?.title??''),
     roundKind:extra?'bonus':(s.phase==='tieTossup'||s.phase==='tieAnswer'?'tie':round?.kind??'regular'),
     puzzleIndex:s.puzzleIndex,puzzlesInRound:round?.puzzles.length??1,
